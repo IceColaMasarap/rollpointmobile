@@ -8,19 +8,31 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMixin {
+class _RegisterPageState extends State<RegisterPage>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
+  final _middleNameController = TextEditingController();
   final _lastNameController = TextEditingController();
+  final _extensionController = TextEditingController();
+  final _idNumberController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  // ✅ NEW Controllers
+  final _schoolController = TextEditingController();
+
+  DateTime? _birthday;
+  String? _selectedSex;
+  String? _selectedCompany;
+  String? _selectedPlatoon;
+  String? _selectedRank; // ✅ NEW
+
   bool _isLoading = false;
   String? _errorMessage;
   String? _successMessage;
-
-  bool _agreeTerms = false; // ✅ checkbox state
+  bool _agreeTerms = false;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -42,10 +54,14 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
   void dispose() {
     _animationController.dispose();
     _firstNameController.dispose();
+    _middleNameController.dispose();
     _lastNameController.dispose();
+    _extensionController.dispose();
+    _idNumberController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _schoolController.dispose(); // ✅ NEW
     super.dispose();
   }
 
@@ -91,7 +107,9 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
                 builder: (context, constraints) {
                   final isWideScreen = constraints.maxWidth > 768;
                   return Container(
-                    margin: isWideScreen ? const EdgeInsets.all(20) : EdgeInsets.zero,
+                    margin: isWideScreen
+                        ? const EdgeInsets.all(20)
+                        : EdgeInsets.zero,
                     constraints: isWideScreen
                         ? const BoxConstraints(maxWidth: 1000)
                         : const BoxConstraints.expand(),
@@ -185,162 +203,351 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
   }
 
   Widget _buildRightSide({bool compact = false}) {
-    return 
-    SingleChildScrollView(child: Padding(
-      padding: EdgeInsets.all(compact ? 20 : 40),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              "Sign Up",
-              style: TextStyle(
-                color: const Color(0xFF1f2937),
-                fontSize: compact ? 24 : 28,
-                fontWeight: FontWeight.w700,
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.all(compact ? 20 : 40),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "Sign Up",
+                style: TextStyle(
+                  color: const Color(0xFF1f2937),
+                  fontSize: compact ? 24 : 28,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            if (_errorMessage != null)
-              _buildMessage(_errorMessage!, Colors.red, const Color(0xFFfef2f2)),
-            if (_successMessage != null)
-              _buildMessage(_successMessage!, Colors.green, const Color(0xFFf0fdf4)),
+              const SizedBox(height: 20),
+              if (_errorMessage != null)
+                _buildMessage(
+                  _errorMessage!,
+                  Colors.red,
+                  const Color(0xFFfef2f2),
+                ),
+              if (_successMessage != null)
+                _buildMessage(
+                  _successMessage!,
+                  Colors.green,
+                  const Color(0xFFf0fdf4),
+                ),
 
-            // ✅ First + Last Name in same row
-            Row(
-              children: [
-                Expanded(
-                  child: _buildTextField(
-                    controller: _firstNameController,
-                    label: "First Name",
-                    hint: "Enter first name",
+              // ✅ Name Fields
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _firstNameController,
+                      label: "First Name",
+                      hint: "Enter first name",
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _middleNameController,
+                      label: "Middle Name",
+                      hint: "Enter middle name",
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _lastNameController,
+                      label: "Last Name",
+                      hint: "Enter last name",
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _extensionController,
+                      label: "Extension",
+                      hint: "e.g., Jr., Sr.",
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ ID Number
+              _buildTextField(
+                controller: _idNumberController,
+                label: "ID Number",
+                hint: "Enter your ID number",
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ NEW: Rank Dropdown
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: "Rank",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
                   ),
                 ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: _buildTextField(
-                    controller: _lastNameController,
-                    label: "Last Name",
-                    hint: "Enter last name",
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 15),
+                value: _selectedRank,
+                items:
+                    [
+                          "Private",
+                          "Corporal",
+                          "Sergeant",
+                          "Lieutenant",
+                          "Captain",
+                          "Major",
+                          "Colonel",
+                        ]
+                        .map(
+                          (rank) =>
+                              DropdownMenuItem(value: rank, child: Text(rank)),
+                        )
+                        .toList(),
+                onChanged: (value) => setState(() => _selectedRank = value),
+                validator: (value) => value == null ? "Required" : null,
+              ),
+              const SizedBox(height: 15),
 
-            // Email
-            _buildTextField(
-              controller: _emailController,
-              label: "Email",
-              hint: "Enter your email address",
-            ),
-            const SizedBox(height: 15),
+              // ✅ NEW: School Field
+              _buildTextField(
+                controller: _schoolController,
+                label: "School",
+                hint: "Enter your school name",
+              ),
+              const SizedBox(height: 15),
 
-            // Password
-            _buildTextField(
-              controller: _passwordController,
-              label: "Password",
-              hint: "Enter your password",
-              isPassword: true,
-            ),
-            const SizedBox(height: 15),
-
-            // Confirm Password
-            _buildTextField(
-              controller: _confirmPasswordController,
-              label: "Confirm Password",
-              hint: "Re-enter your password",
-              isPassword: true,
-              validator: (value) {
-                if (value == null || value.isEmpty) return "Required";
-                if (value != _passwordController.text) return "Passwords do not match";
-                return null;
-              },
-            ),
-            const SizedBox(height: 20),
-
-            // ✅ Terms and Conditions Checkbox
-            Row(
-              children: [
-                Checkbox(
-                  value: _agreeTerms,
-                  onChanged: (value) {
+              // ✅ Birthday Picker
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime(2000),
+                    firstDate: DateTime(1900),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
                     setState(() {
-                      _agreeTerms = value ?? false;
+                      _birthday = picked;
                     });
-                  },
+                  }
+                },
+                child: AbsorbPointer(
+                  child: TextFormField(
+                    decoration: InputDecoration(
+                      labelText: "Birthday",
+                      hintText: "Select your birthday",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      suffixIcon: const Icon(Icons.calendar_today),
+                    ),
+                    controller: TextEditingController(
+                      text: _birthday != null
+                          ? "${_birthday!.year}-${_birthday!.month}-${_birthday!.day}"
+                          : "",
+                    ),
+                    validator: (value) => _birthday == null ? "Required" : null,
+                  ),
                 ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      // TODO: Navigate to Terms and Conditions page
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ Sex Dropdown
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: "Sex",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                value: _selectedSex,
+                items: ["Male", "Female", "Prefer not to say"]
+                    .map(
+                      (sex) => DropdownMenuItem(value: sex, child: Text(sex)),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => _selectedSex = value),
+                validator: (value) => value == null ? "Required" : null,
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ Company Dropdown
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: "Company",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                value: _selectedCompany,
+                items: ["Alpha", "Bravo", "Charlie", "Delta"]
+                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                    .toList(),
+                onChanged: (value) => setState(() => _selectedCompany = value),
+                validator: (value) => value == null ? "Required" : null,
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ Platoon Dropdown
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: "Platoon",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                value: _selectedPlatoon,
+                items: ["1st Platoon", "2nd Platoon", "3rd Platoon"]
+                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                    .toList(),
+                onChanged: (value) => setState(() => _selectedPlatoon = value),
+                validator: (value) => value == null ? "Required" : null,
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ Email
+              _buildTextField(
+                controller: _emailController,
+                label: "Email",
+                hint: "Enter your email address",
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ Password
+              _buildTextField(
+                controller: _passwordController,
+                label: "Password",
+                hint: "Enter your password",
+                isPassword: true,
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ Confirm Password
+              _buildTextField(
+                controller: _confirmPasswordController,
+                label: "Confirm Password",
+                hint: "Re-enter your password",
+                isPassword: true,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return "Required";
+                  if (value != _passwordController.text) {
+                    return "Passwords do not match";
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+
+              // ✅ Terms and Conditions
+              Row(
+                children: [
+                  Checkbox(
+                    value: _agreeTerms,
+                    onChanged: (value) {
+                      setState(() {
+                        _agreeTerms = value ?? false;
+                      });
                     },
-                    child: const Text.rich(
-                      TextSpan(
-                        text: "I agree to the ",
-                        style: TextStyle(color: Colors.black87),
-                        children: [
-                          TextSpan(
-                            text: "Terms and Conditions",
-                            style: TextStyle(
-                              color: Color(0xFF059669),
-                              decoration: TextDecoration.underline,
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        // TODO: Navigate to Terms page
+                      },
+                      child: const Text.rich(
+                        TextSpan(
+                          text: "I agree to the ",
+                          style: TextStyle(color: Colors.black87),
+                          children: [
+                            TextSpan(
+                              text: "Terms and Conditions",
+                              style: TextStyle(
+                                color: Color(0xFF059669),
+                                decoration: TextDecoration.underline,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Sign Up Button
-            ElevatedButton(
-              onPressed: _isLoading ? null : _handleRegister,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ],
               ),
-              child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                  : const Text("Sign Up"),
-            ),
-            const SizedBox(height: 15),
+              const SizedBox(height: 20),
 
-            // ✅ Already have an account? Login here
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  "Already have an account? ",
-                  style: TextStyle(color: Color(0xFF6b7280), fontSize: 14),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: const Text(
-                    "Login here",
-                    style: TextStyle(
-                      color: Color(0xFF059669),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+              // ✅ Sign Up Button
+              ElevatedButton(
+                onPressed: _isLoading ? null : _handleRegister,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-              ],
-            ),
-          ],
+                child: _isLoading
+                    ? const CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      )
+                    : const Text("Sign Up"),
+              ),
+              const SizedBox(height: 15),
+
+              // ✅ Login link
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "Already have an account? ",
+                    style: TextStyle(color: Color(0xFF6b7280), fontSize: 14),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    child: const Text(
+                      "Login here",
+                      style: TextStyle(
+                        color: Color(0xFF059669),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-   
+    );
   }
 
   Widget _buildTextField({
@@ -365,11 +572,16 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
         TextFormField(
           controller: controller,
           obscureText: isPassword,
-          validator: validator ?? (value) => value?.isEmpty ?? true ? "Required" : null,
+          validator:
+              validator ??
+              (value) => value?.isEmpty ?? true ? "Required" : null,
           decoration: InputDecoration(
             hintText: hint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
             filled: true,
             fillColor: Colors.white,
           ),
@@ -382,7 +594,10 @@ class _RegisterPageState extends State<RegisterPage> with TickerProviderStateMix
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
       child: Text(msg, style: TextStyle(color: color)),
     );
   }
