@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'widgets/camouflage_background.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -8,26 +9,15 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage>
+class _RegisterPageState extends State<RegisterPage> 
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _firstNameController = TextEditingController();
-  final _middleNameController = TextEditingController();
-  final _lastNameController = TextEditingController();
-  final _extensionController = TextEditingController();
-  final _idNumberController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // ✅ NEW Controllers
-  final _schoolController = TextEditingController();
-
-  DateTime? _birthday;
-  String? _selectedSex;
-  String? _selectedCompany;
-  String? _selectedPlatoon;
-  String? _selectedRank; // ✅ NEW
+  // Fixed: Proper Supabase client initialization
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -53,15 +43,9 @@ class _RegisterPageState extends State<RegisterPage>
   @override
   void dispose() {
     _animationController.dispose();
-    _firstNameController.dispose();
-    _middleNameController.dispose();
-    _lastNameController.dispose();
-    _extensionController.dispose();
-    _idNumberController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _schoolController.dispose(); // ✅ NEW
     super.dispose();
   }
 
@@ -80,12 +64,118 @@ class _RegisterPageState extends State<RegisterPage>
       _successMessage = null;
     });
 
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Sign up with Supabase with improved error handling
+      final response = await _supabase.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
-    setState(() {
-      _isLoading = false;
-      _successMessage = "Account created successfully!";
-    });
+      if (response.user != null) {
+        setState(() {
+          _successMessage = "Account created successfully! Please check your email for verification.";
+        });
+        
+        // Show verification modal
+        _showVerificationModal();
+      } else if (response.session == null) {
+        setState(() {
+          _successMessage = "Account created! Please check your email for verification.";
+        });
+        _showVerificationModal();
+      }
+    } on AuthException catch (authError) {
+      setState(() {
+        if (authError.message.toLowerCase().contains('email')) {
+          _errorMessage = "Registration failed: This email is already registered or invalid";
+        } else if (authError.message.toLowerCase().contains('password')) {
+          _errorMessage = "Registration failed: Password does not meet requirements";
+        } else {
+          _errorMessage = "Registration failed: ${authError.message}";
+        }
+      });
+    } catch (error) {
+      setState(() {
+        _errorMessage = "Registration failed: An unexpected error occurred. Please try again.";
+      });
+      print("Registration error: $error"); // For debugging
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showVerificationModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.email_outlined,
+                size: 60,
+                color: Color(0xFF059669),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Almost there!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'We\'ve sent a verification link to\n${_emailController.text}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Please confirm your email address before logging in.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pop(); // Close modal
+                    Navigator.of(context).pop(); // Go back to login
+                  },
+                  child: const Text(
+                    'Got it!',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -233,248 +323,50 @@ class _RegisterPageState extends State<RegisterPage>
                   const Color(0xFFf0fdf4),
                 ),
 
-              // ✅ Name Fields
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _firstNameController,
-                      label: "First Name",
-                      hint: "Enter first name",
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _middleNameController,
-                      label: "Middle Name",
-                      hint: "Enter middle name",
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _lastNameController,
-                      label: "Last Name",
-                      hint: "Enter last name",
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value:
-                          null, // default value (can be set to "Jr." or something if you like)
-                      items: const [
-                        DropdownMenuItem(value: "Jr.", child: Text("Jr.")),
-                        DropdownMenuItem(value: "Sr.", child: Text("Sr.")),
-                        DropdownMenuItem(value: "II", child: Text("II")),
-                        DropdownMenuItem(value: "III", child: Text("III")),
-                        DropdownMenuItem(value: "IV", child: Text("IV")),
-                        DropdownMenuItem(value: "V", child: Text("V")),
-                      ],
-                      onChanged: (value) {
-                        // store the selected extension into your controller manually
-                        _extensionController.text = value ?? "";
-                      },
-                      decoration: const InputDecoration(
-                        labelText: "Extension",
-                        hintText: "Select extension",
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ ID Number
-              _buildTextField(
-                controller: _idNumberController,
-                label: "ID Number",
-                hint: "Enter your ID number",
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ NEW: Rank Dropdown
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "Rank",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                value: _selectedRank,
-                items:
-                    [
-                          "Private",
-                          "Corporal",
-                          "Sergeant",
-                          "Lieutenant",
-                          "Captain",
-                          "Major",
-                          "Colonel",
-                        ]
-                        .map(
-                          (rank) =>
-                              DropdownMenuItem(value: rank, child: Text(rank)),
-                        )
-                        .toList(),
-                onChanged: (value) => setState(() => _selectedRank = value),
-                validator: (value) => value == null ? "Required" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ NEW: School Field
-              _buildTextField(
-                controller: _schoolController,
-                label: "School",
-                hint: "Enter your school name",
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Birthday Picker
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime(2000),
-                    firstDate: DateTime(1900),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      _birthday = picked;
-                    });
-                  }
-                },
-                child: AbsorbPointer(
-                  child: TextFormField(
-                    decoration: InputDecoration(
-                      labelText: "Birthday",
-                      hintText: "Select your birthday",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      suffixIcon: const Icon(Icons.calendar_today),
-                    ),
-                    controller: TextEditingController(
-                      text: _birthday != null
-                          ? "${_birthday!.year}-${_birthday!.month}-${_birthday!.day}"
-                          : "",
-                    ),
-                    validator: (value) => _birthday == null ? "Required" : null,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Sex Dropdown
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "Sex",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                value: _selectedSex,
-                items: ["Male", "Female", "Prefer not to say"]
-                    .map(
-                      (sex) => DropdownMenuItem(value: sex, child: Text(sex)),
-                    )
-                    .toList(),
-                onChanged: (value) => setState(() => _selectedSex = value),
-                validator: (value) => value == null ? "Required" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Company Dropdown
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "Company",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                value: _selectedCompany,
-                items: ["Alpha", "Bravo", "Charlie", "Delta"]
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (value) => setState(() => _selectedCompany = value),
-                validator: (value) => value == null ? "Required" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Platoon Dropdown
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "Platoon",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                value: _selectedPlatoon,
-                items: ["1st Platoon", "2nd Platoon", "3rd Platoon"]
-                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                    .toList(),
-                onChanged: (value) => setState(() => _selectedPlatoon = value),
-                validator: (value) => value == null ? "Required" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Email
+              // Email Field
               _buildTextField(
                 controller: _emailController,
                 label: "Email",
                 hint: "Enter your email address",
+                validator: (value) {
+                  if (value?.isEmpty ?? true) return "Email is required";
+                  final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+                  if (!emailRegex.hasMatch(value!)) {
+                    return "Enter a valid email address";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 15),
 
-              // ✅ Password
+              // Password Field
               _buildTextField(
                 controller: _passwordController,
                 label: "Password",
                 hint: "Enter your password",
                 isPassword: true,
+                validator: (value) {
+                  if (value?.isEmpty ?? true) return "Password is required";
+                  if (value!.length < 8) {
+                    return "Password must be at least 8 characters";
+                  }
+                  final passwordRegex = RegExp(r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};:"\\|,.<>/?]).{8,}$');
+                  if (!passwordRegex.hasMatch(value)) {
+                    return "Password must contain at least one uppercase letter, one number, and one special character";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 15),
 
-              // ✅ Confirm Password
+              // Confirm Password Field
               _buildTextField(
                 controller: _confirmPasswordController,
                 label: "Confirm Password",
                 hint: "Re-enter your password",
                 isPassword: true,
                 validator: (value) {
-                  if (value == null || value.isEmpty) return "Required";
+                  if (value?.isEmpty ?? true) return "Confirm password is required";
                   if (value != _passwordController.text) {
                     return "Passwords do not match";
                   }
@@ -483,7 +375,7 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 20),
 
-              // ✅ Terms and Conditions
+              // Terms and Conditions
               Row(
                 children: [
                   Checkbox(
@@ -520,7 +412,7 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 20),
 
-              // ✅ Sign Up Button
+              // Sign Up Button
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleRegister,
                 style: ElevatedButton.styleFrom(
@@ -540,7 +432,7 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 15),
 
-              // ✅ Login link
+              // Login link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -592,9 +484,7 @@ class _RegisterPageState extends State<RegisterPage>
         TextFormField(
           controller: controller,
           obscureText: isPassword,
-          validator:
-              validator ??
-              (value) => value?.isEmpty ?? true ? "Required" : null,
+          validator: validator ?? (value) => value?.isEmpty ?? true ? "Required" : null,
           decoration: InputDecoration(
             hintText: hint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
