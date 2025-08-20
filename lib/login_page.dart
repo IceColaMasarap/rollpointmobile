@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'widgets/camouflage_background.dart';
-import 'register_page.dart'; // 👈 add this at the top
+import 'register_page.dart';
 import 'forgot_password_page.dart';
 import 'ProfileSetupPage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -13,7 +14,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
@@ -23,8 +24,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  static const String demoUsername = 'demo@attendeee.com';
-  static const String demoPassword = 'demo123';
+  // Supabase client
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   @override
   void initState() {
@@ -42,7 +43,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   @override
   void dispose() {
     _animationController.dispose();
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -56,47 +57,41 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       _successMessage = null;
     });
 
-    await Future.delayed(const Duration(milliseconds: 1500));
+    try {
+      final response = await _supabase.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
-    setState(() {
-      _isLoading = false;
-    });
+      if (response.session != null) {
+        setState(() {
+          _successMessage = 'Login successful! Redirecting...';
+        });
 
-    if (_usernameController.text == demoUsername &&
-        _passwordController.text == demoPassword) {
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
+          );
+        });
+      } else {
+        setState(() {
+          _errorMessage = "Login failed: No active session.";
+        });
+      }
+    } on AuthException catch (authError) {
       setState(() {
-        _successMessage = 'Login successful! Redirecting...';
+        _errorMessage = "Login failed: ${authError.message}";
       });
-
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
-        );
-      });
-    } else {
+    } catch (error) {
       setState(() {
-        _errorMessage = 'Invalid username or password.';
+        _errorMessage = "Unexpected error: $error";
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
       });
     }
-  }
-
-  void _showDashboardDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Welcome to Attendeee Dashboard!'),
-        content: const Text(
-          'Demo credentials:\nUsername: demo@attendeee.com\nPassword: demo123',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -124,7 +119,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         : EdgeInsets.zero,
                     constraints: isWideScreen
                         ? const BoxConstraints(maxWidth: 1000)
-                        : const BoxConstraints.expand(), // full screen on mobile
+                        : const BoxConstraints.expand(),
                     child: isWideScreen
                         ? _buildWideLayout()
                         : _buildNarrowLayout(),
@@ -257,9 +252,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 const Color(0xFFf0fdf4),
               ),
             _buildTextField(
-              controller: _usernameController,
-              label: 'Username or Email',
-              hint: 'Enter your username',
+              controller: _emailController,
+              label: 'Email',
+              hint: 'Enter your email',
             ),
             const SizedBox(height: 20),
             _buildTextField(
@@ -289,7 +284,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 ),
               ),
             ),
-
             const SizedBox(height: 25),
             _buildLoginButton(),
             const SizedBox(height: 20),
