@@ -1,92 +1,182 @@
-  import 'package:flutter/material.dart';
-  import 'widgets/camouflage_background.dart';
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'widgets/camouflage_background.dart';
 
-  class RegisterPage extends StatefulWidget {
-    const RegisterPage({Key? key}) : super(key: key);
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({Key? key}) : super(key: key);
 
-    @override
-    State<RegisterPage> createState() => _RegisterPageState();
-  }
+  @override
+  State<RegisterPage> createState() => _RegisterPageState();
+}
 
-class _RegisterPageState extends State<RegisterPage>
+class _RegisterPageState extends State<RegisterPage> 
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
-  final _firstNameController = TextEditingController();
-  final _middleNameController = TextEditingController();
-  final _lastNameController = TextEditingController();
-  final _extensionController = TextEditingController();
-  final _idNumberController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // ✅ NEW Controllers
-  final _schoolController = TextEditingController();
-
-  DateTime? _birthday;
-  String? _selectedSex;
-  String? _selectedCompany;
-  String? _selectedPlatoon;
-  String? _selectedRank; // ✅ NEW
+  // Fixed: Proper Supabase client initialization
+  SupabaseClient get _supabase => Supabase.instance.client;
 
   bool _isLoading = false;
   String? _errorMessage;
   String? _successMessage;
   bool _agreeTerms = false;
 
-    late AnimationController _animationController;
-    late Animation<double> _fadeAnimation;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
-    @override
-    void initState() {
-      super.initState();
-      _animationController = AnimationController(
-        duration: const Duration(milliseconds: 1200),
-        vsync: this,
-      );
-      _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-      );
-      _animationController.forward();
-    }
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    _animationController.forward();
+  }
 
   @override
   void dispose() {
     _animationController.dispose();
-    _firstNameController.dispose();
-    _middleNameController.dispose();
-    _lastNameController.dispose();
-    _extensionController.dispose();
-    _idNumberController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _schoolController.dispose(); // ✅ NEW
     super.dispose();
   }
 
-    Future<void> _handleRegister() async {
-      if (!_formKey.currentState!.validate()) return;
-      if (!_agreeTerms) {
-        setState(() {
-          _errorMessage = "You must agree to the Terms and Conditions";
-        });
-        return;
-      }
-
+  Future<void> _handleRegister() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (!_agreeTerms) {
       setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-        _successMessage = null;
+        _errorMessage = "You must agree to the Terms and Conditions";
       });
+      return;
+    }
 
-      await Future.delayed(const Duration(seconds: 2));
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
 
+    try {
+      // Sign up with Supabase with improved error handling
+      final response = await _supabase.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (response.user != null) {
+        setState(() {
+          _successMessage = "Account created successfully! Please check your email for verification.";
+        });
+        
+        // Show verification modal
+        _showVerificationModal();
+      } else if (response.session == null) {
+        setState(() {
+          _successMessage = "Account created! Please check your email for verification.";
+        });
+        _showVerificationModal();
+      }
+    } on AuthException catch (authError) {
+      setState(() {
+        if (authError.message.toLowerCase().contains('email')) {
+          _errorMessage = "Registration failed: This email is already registered or invalid";
+        } else if (authError.message.toLowerCase().contains('password')) {
+          _errorMessage = "Registration failed: Password does not meet requirements";
+        } else {
+          _errorMessage = "Registration failed: ${authError.message}";
+        }
+      });
+    } catch (error) {
+      setState(() {
+        _errorMessage = "Registration failed: An unexpected error occurred. Please try again.";
+      });
+      print("Registration error: $error"); // For debugging
+    } finally {
       setState(() {
         _isLoading = false;
-        _successMessage = "Account created successfully!";
       });
     }
+  }
+
+  void _showVerificationModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.email_outlined,
+                size: 60,
+                color: Color(0xFF059669),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Almost there!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'We\'ve sent a verification link to\n${_emailController.text}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Please confirm your email address before logging in.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.of(context).pop(); // Close modal
+                    Navigator.of(context).pop(); // Go back to login
+                  },
+                  child: const Text(
+                    'Got it!',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -126,81 +216,81 @@ class _RegisterPageState extends State<RegisterPage>
     );
   }
 
-    Widget _buildWideLayout() {
-      return _cardWrapper(
-        Row(
+  Widget _buildWideLayout() {
+    return _cardWrapper(
+      Row(
+        children: [
+          Expanded(child: _buildLeftSide()),
+          Expanded(child: _buildRightSide()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNarrowLayout() {
+    return _cardWrapper(
+      SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(child: _buildLeftSide()),
-            Expanded(child: _buildRightSide()),
+            SizedBox(height: 180, child: _buildLeftSide(compact: true)),
+            _buildRightSide(compact: true),
           ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    Widget _buildNarrowLayout() {
-      return _cardWrapper(
-        SingleChildScrollView(
+  Widget _cardWrapper(Widget child) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 25,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
+    );
+  }
+
+  Widget _buildLeftSide({bool compact = false}) {
+    return CamouflageBackground(
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.all(compact ? 20 : 40),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SizedBox(height: 180, child: _buildLeftSide(compact: true)),
-              _buildRightSide(compact: true),
+              const Text('📝', style: TextStyle(fontSize: 32)),
+              const SizedBox(height: 10),
+              Text(
+                'Create Account',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: compact ? 28 : 36,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 15),
+              Text(
+                'Join Attendeee and manage attendance effortlessly!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: compact ? 14 : 16,
+                ),
+              ),
             ],
           ),
         ),
-      );
-    }
-
-    Widget _cardWrapper(Widget child) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 25,
-              offset: const Offset(0, 20),
-            ),
-          ],
-        ),
-        child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
-      );
-    }
-
-    Widget _buildLeftSide({bool compact = false}) {
-      return CamouflageBackground(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(compact ? 20 : 40),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('📝', style: TextStyle(fontSize: 32)),
-                const SizedBox(height: 10),
-                Text(
-                  'Create Account',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: compact ? 28 : 36,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 15),
-                Text(
-                  'Join Attendeee and manage attendance effortlessly!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: compact ? 14 : 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+      ),
+    );
+  }
 
   Widget _buildRightSide({bool compact = false}) {
     return SingleChildScrollView(
@@ -233,228 +323,50 @@ class _RegisterPageState extends State<RegisterPage>
                   const Color(0xFFf0fdf4),
                 ),
 
-              // ✅ Name Fields
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _firstNameController,
-                      label: "First Name",
-                      hint: "Enter first name",
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _middleNameController,
-                      label: "Middle Name",
-                      hint: "Enter middle name",
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _lastNameController,
-                      label: "Last Name",
-                      hint: "Enter last name",
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: _buildTextField(
-                      controller: _extensionController,
-                      label: "Extension",
-                      hint: "e.g., Jr., Sr.",
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ ID Number
-              _buildTextField(
-                controller: _idNumberController,
-                label: "ID Number",
-                hint: "Enter your ID number",
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ NEW: Rank Dropdown
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "Rank",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                value: _selectedRank,
-                items:
-                    [
-                          "Private",
-                          "Corporal",
-                          "Sergeant",
-                          "Lieutenant",
-                          "Captain",
-                          "Major",
-                          "Colonel",
-                        ]
-                        .map(
-                          (rank) =>
-                              DropdownMenuItem(value: rank, child: Text(rank)),
-                        )
-                        .toList(),
-                onChanged: (value) => setState(() => _selectedRank = value),
-                validator: (value) => value == null ? "Required" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ NEW: School Field
-              _buildTextField(
-                controller: _schoolController,
-                label: "School",
-                hint: "Enter your school name",
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Birthday Picker
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime(2000),
-                    firstDate: DateTime(1900),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      _birthday = picked;
-                    });
-                  }
-                },
-                child: AbsorbPointer(
-                  child: TextFormField(
-                    decoration: InputDecoration(
-                      labelText: "Birthday",
-                      hintText: "Select your birthday",
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      suffixIcon: const Icon(Icons.calendar_today),
-                    ),
-                    controller: TextEditingController(
-                      text: _birthday != null
-                          ? "${_birthday!.year}-${_birthday!.month}-${_birthday!.day}"
-                          : "",
-                    ),
-                    validator: (value) => _birthday == null ? "Required" : null,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Sex Dropdown
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "Sex",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                value: _selectedSex,
-                items: ["Male", "Female", "Prefer not to say"]
-                    .map(
-                      (sex) => DropdownMenuItem(value: sex, child: Text(sex)),
-                    )
-                    .toList(),
-                onChanged: (value) => setState(() => _selectedSex = value),
-                validator: (value) => value == null ? "Required" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Company Dropdown
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "Company",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                value: _selectedCompany,
-                items: ["Alpha", "Bravo", "Charlie", "Delta"]
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (value) => setState(() => _selectedCompany = value),
-                validator: (value) => value == null ? "Required" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Platoon Dropdown
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "Platoon",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-                value: _selectedPlatoon,
-                items: ["1st Platoon", "2nd Platoon", "3rd Platoon"]
-                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                    .toList(),
-                onChanged: (value) => setState(() => _selectedPlatoon = value),
-                validator: (value) => value == null ? "Required" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // ✅ Email
+              // Email Field
               _buildTextField(
                 controller: _emailController,
                 label: "Email",
                 hint: "Enter your email address",
+                validator: (value) {
+                  if (value?.isEmpty ?? true) return "Email is required";
+                  final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+                  if (!emailRegex.hasMatch(value!)) {
+                    return "Enter a valid email address";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 15),
 
-              // ✅ Password
+              // Password Field
               _buildTextField(
                 controller: _passwordController,
                 label: "Password",
                 hint: "Enter your password",
                 isPassword: true,
+                validator: (value) {
+                  if (value?.isEmpty ?? true) return "Password is required";
+                  if (value!.length < 8) {
+                    return "Password must be at least 8 characters";
+                  }
+                  final passwordRegex = RegExp(r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};:"\\|,.<>/?]).{8,}$');
+                  if (!passwordRegex.hasMatch(value)) {
+                    return "Password must contain at least one uppercase letter, one number, and one special character";
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 15),
 
-              // ✅ Confirm Password
+              // Confirm Password Field
               _buildTextField(
                 controller: _confirmPasswordController,
                 label: "Confirm Password",
                 hint: "Re-enter your password",
                 isPassword: true,
                 validator: (value) {
-                  if (value == null || value.isEmpty) return "Required";
+                  if (value?.isEmpty ?? true) return "Confirm password is required";
                   if (value != _passwordController.text) {
                     return "Passwords do not match";
                   }
@@ -463,7 +375,7 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 20),
 
-              // ✅ Terms and Conditions
+              // Terms and Conditions
               Row(
                 children: [
                   Checkbox(
@@ -500,7 +412,7 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 20),
 
-              // ✅ Sign Up Button
+              // Sign Up Button
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleRegister,
                 style: ElevatedButton.styleFrom(
@@ -520,7 +432,7 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 15),
 
-              // ✅ Login link
+              // Login link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -572,9 +484,7 @@ class _RegisterPageState extends State<RegisterPage>
         TextFormField(
           controller: controller,
           obscureText: isPassword,
-          validator:
-              validator ??
-              (value) => value?.isEmpty ?? true ? "Required" : null,
+          validator: validator ?? (value) => value?.isEmpty ?? true ? "Required" : null,
           decoration: InputDecoration(
             hintText: hint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
