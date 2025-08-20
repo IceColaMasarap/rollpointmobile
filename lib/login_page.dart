@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'widgets/camouflage_background.dart';
 import 'register_page.dart'; // 👈 add this at the top
+import 'forgot_password_page.dart';
+import 'ProfileSetupPage.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -63,11 +65,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     if (_usernameController.text == demoUsername &&
         _passwordController.text == demoPassword) {
       setState(() {
-        _successMessage = 'Login successful! Redirecting to dashboard...';
+        _successMessage = 'Login successful! Redirecting...';
       });
 
       Future.delayed(const Duration(milliseconds: 1500), () {
-        _showDashboardDialog();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
+        );
       });
     } else {
       setState(() {
@@ -263,6 +268,28 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               hint: 'Enter your password',
               isPassword: true,
             ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ForgotPasswordPage(),
+                    ),
+                  );
+                },
+                child: const Text(
+                  "Forgot password?",
+                  style: TextStyle(
+                    color: Color(0xFF059669),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+
             const SizedBox(height: 25),
             _buildLoginButton(),
             const SizedBox(height: 20),

@@ -266,10 +266,30 @@ class _RegisterPageState extends State<RegisterPage>
                   ),
                   const SizedBox(width: 15),
                   Expanded(
-                    child: _buildTextField(
-                      controller: _extensionController,
-                      label: "Extension",
-                      hint: "e.g., Jr., Sr.",
+                    child: DropdownButtonFormField<String>(
+                      value:
+                          null, // default value (can be set to "Jr." or something if you like)
+                      items: const [
+                        DropdownMenuItem(value: "Jr.", child: Text("Jr.")),
+                        DropdownMenuItem(value: "Sr.", child: Text("Sr.")),
+                        DropdownMenuItem(value: "II", child: Text("II")),
+                        DropdownMenuItem(value: "III", child: Text("III")),
+                        DropdownMenuItem(value: "IV", child: Text("IV")),
+                        DropdownMenuItem(value: "V", child: Text("V")),
+                      ],
+                      onChanged: (value) {
+                        // store the selected extension into your controller manually
+                        _extensionController.text = value ?? "";
+                      },
+                      decoration: const InputDecoration(
+                        labelText: "Extension",
+                        hintText: "Select extension",
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                      ),
                     ),
                   ),
                 ],
