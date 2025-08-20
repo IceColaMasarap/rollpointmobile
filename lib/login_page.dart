@@ -95,41 +95,43 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    body: Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFf0fdf4), Color(0xFFecfdf5)],
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFf0fdf4), Color(0xFFecfdf5)],
+          ),
         ),
-      ),
-      child: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWideScreen = constraints.maxWidth > 768;
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWideScreen = constraints.maxWidth > 768;
 
-            return Center(
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: Container(
-                  margin: isWideScreen ? const EdgeInsets.all(20) : EdgeInsets.zero,
-                  constraints: isWideScreen
-                      ? const BoxConstraints(maxWidth: 1000)
-                      : const BoxConstraints.expand(), // full screen on mobile
-                  child: isWideScreen
-                      ? _buildWideLayout()
-                      : _buildNarrowLayout(),
+              return Center(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Container(
+                    margin: isWideScreen
+                        ? const EdgeInsets.all(20)
+                        : EdgeInsets.zero,
+                    constraints: isWideScreen
+                        ? const BoxConstraints(maxWidth: 1000)
+                        : const BoxConstraints.expand(), // full screen on mobile
+                    child: isWideScreen
+                        ? _buildWideLayout()
+                        : _buildNarrowLayout(),
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildWideLayout() {
     return _cardWrapper(
@@ -143,17 +145,16 @@ Widget build(BuildContext context) {
   }
 
   Widget _buildNarrowLayout() {
-  return SingleChildScrollView(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(height: 200, child: _buildLeftSide(compact: true)),
-        _buildRightSide(compact: true),
-      ],
-    ),
-  );
-}
-
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(height: 200, child: _buildLeftSide(compact: true)),
+          _buildRightSide(compact: true),
+        ],
+      ),
+    );
+  }
 
   Widget _cardWrapper(Widget child) {
     return Container(
@@ -274,11 +275,11 @@ Widget build(BuildContext context) {
                 ),
                 TextButton(
                   onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const RegisterPage()),
-    );
-  },
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const RegisterPage()),
+                    );
+                  },
                   child: const Text(
                     'Sign up here',
                     style: TextStyle(
