@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'mainScreen.dart';
 
 class ProfileSetupPage extends StatefulWidget {
   const ProfileSetupPage({super.key});
@@ -560,10 +561,15 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              // TODO: Navigate to Dashboard page here
+              Navigator.of(context).pop(); // close dialog first
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const MainScreen()),
+    );
+
             },
             style: ElevatedButton.styleFrom(
+              
               backgroundColor: const Color(0xFF059669),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
