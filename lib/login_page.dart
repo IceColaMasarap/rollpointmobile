@@ -3,6 +3,7 @@ import 'widgets/camouflage_background.dart';
 import 'register_page.dart';
 import 'forgot_password_page.dart';
 import 'ProfileSetupPage.dart';
+import 'mainScreen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginPage extends StatefulWidget {
@@ -68,11 +69,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           _successMessage = 'Login successful! Redirecting...';
         });
 
+        // Check if user profile is configured
+        final userResponse = await _supabase
+            .from('users')
+            .select('is_configured')
+            .eq('id', response.user!.id)
+            .single();
+
+        final bool isConfigured = userResponse['is_configured'] ?? false;
+
         Future.delayed(const Duration(milliseconds: 1200), () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
-          );
+          if (isConfigured) {
+            // User has completed profile setup, go to main screen
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const MainScreen()),
+            );
+          } else {
+            // User needs to complete profile setup
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
+            );
+          }
         });
       } else {
         setState(() {

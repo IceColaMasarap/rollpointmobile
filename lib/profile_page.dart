@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'login_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -23,10 +25,7 @@ class ProfilePage extends StatelessWidget {
             onPressed: () {
               // Handle edit profile
             },
-            icon: const Icon(
-              Icons.edit_outlined,
-              color: Color(0xFF059669),
-            ),
+            icon: const Icon(Icons.edit_outlined, color: Color(0xFF059669)),
           ),
         ],
       ),
@@ -67,9 +66,9 @@ class ProfilePage extends StatelessWidget {
                           size: 40,
                         ),
                       ),
-                      
+
                       const SizedBox(height: 16),
-                      
+
                       const Text(
                         'Sean Derick',
                         style: TextStyle(
@@ -78,9 +77,9 @@ class ProfilePage extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      
+
                       const SizedBox(height: 4),
-                      
+
                       const Text(
                         '2023-77144-ABCD',
                         style: TextStyle(
@@ -88,9 +87,9 @@ class ProfilePage extends StatelessWidget {
                           fontSize: 16,
                         ),
                       ),
-                      
+
                       const SizedBox(height: 2),
-                      
+
                       const Text(
                         'Student - Platoon',
                         style: TextStyle(
@@ -102,9 +101,9 @@ class ProfilePage extends StatelessWidget {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Profile Details
               _buildInfoSection('Personal Information', [
                 _buildInfoItem('Full Name', 'Sean Derick'),
@@ -112,18 +111,18 @@ class ProfilePage extends StatelessWidget {
                 _buildInfoItem('Email', 'sean.derick@example.com'),
                 _buildInfoItem('Phone', '+63 912 345 6789'),
               ]),
-              
+
               const SizedBox(height: 16),
-              
+
               _buildInfoSection('Academic Information', [
                 _buildInfoItem('Program', 'Computer Science'),
                 _buildInfoItem('Year Level', '2nd Year'),
                 _buildInfoItem('Section', 'Platoon'),
                 _buildInfoItem('Enrollment Status', 'Active'),
               ]),
-              
+
               const SizedBox(height: 24),
-              
+
               // Action Buttons
               Column(
                 children: [
@@ -134,9 +133,9 @@ class ProfilePage extends StatelessWidget {
                       // Handle change password
                     },
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   _buildActionButton(
                     icon: Icons.notifications_outlined,
                     title: 'Notification Settings',
@@ -144,9 +143,9 @@ class ProfilePage extends StatelessWidget {
                       // Handle notification settings
                     },
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   _buildActionButton(
                     icon: Icons.help_outline,
                     title: 'Help & Support',
@@ -154,9 +153,9 @@ class ProfilePage extends StatelessWidget {
                       // Handle help
                     },
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   _buildActionButton(
                     icon: Icons.info_outline,
                     title: 'About App',
@@ -164,9 +163,9 @@ class ProfilePage extends StatelessWidget {
                       // Handle about
                     },
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Logout Button
                   SizedBox(
                     width: double.infinity,
@@ -193,7 +192,7 @@ class ProfilePage extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 40),
             ],
           ),
@@ -247,10 +246,7 @@ class ProfilePage extends StatelessWidget {
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(
-                color: Color(0xFF6b7280),
-                fontSize: 14,
-              ),
+              style: const TextStyle(color: Color(0xFF6b7280), fontSize: 14),
             ),
           ),
           Expanded(
@@ -293,11 +289,7 @@ class ProfilePage extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(
-                icon,
-                color: const Color(0xFF6b7280),
-                size: 20,
-              ),
+              Icon(icon, color: const Color(0xFF6b7280), size: 20),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -331,15 +323,11 @@ class ProfilePage extends StatelessWidget {
           ),
           title: const Text(
             'Logout',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w600),
           ),
           content: const Text(
             'Are you sure you want to logout?',
-            style: TextStyle(
-              color: Color(0xFF6b7280),
-            ),
+            style: TextStyle(color: Color(0xFF6b7280)),
           ),
           actions: [
             TextButton(
@@ -348,16 +336,23 @@ class ProfilePage extends StatelessWidget {
               },
               child: const Text(
                 'Cancel',
-                style: TextStyle(
-                  color: Color(0xFF6b7280),
-                ),
+                style: TextStyle(color: Color(0xFF6b7280)),
               ),
             ),
             ElevatedButton(
-              onPressed: () {
-                // Handle logout
+              onPressed: () async {
+                // ✅ Logout from Supabase
+                await Supabase.instance.client.auth.signOut();
+
+                // Close the dialog
                 Navigator.of(context).pop();
-                // Navigate back to login or handle logout logic
+
+                // ✅ Navigate to login page (replace current stack)
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFEF4444),

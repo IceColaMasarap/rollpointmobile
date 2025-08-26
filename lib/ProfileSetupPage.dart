@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'mainScreen.dart';
 
 class ProfileSetupPage extends StatefulWidget {
@@ -10,6 +11,8 @@ class ProfileSetupPage extends StatefulWidget {
 
 class _ProfileSetupPageState extends State<ProfileSetupPage> {
   int _currentStep = 0;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   // Controllers for text inputs
   final _firstNameController = TextEditingController();
@@ -30,21 +33,73 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   String? _selectedCompany;
   String? _selectedPlatoon;
 
-  // Placeholder data (normally from API/database)
+
+  SupabaseClient get _supabase => Supabase.instance.client;
+
+
+  List<Map<String, dynamic>> _schools = [];
+  List<Map<String, dynamic>> _ranks = [];
+  List<Map<String, dynamic>> _companies = [];
+  List<Map<String, dynamic>> _platoons = [];
+
+  // Static data
   final List<String> _extensions = ['Jr.', 'Sr.', 'II', 'III', 'IV'];
   final List<String> _sexOptions = ['Male', 'Female'];
   
-  // Philippine Address placeholders
+  // Philippine Address data (you might want to load these from DB too)
   final List<String> _regions = ['NCR', 'CAR', 'Region I', 'Region II', 'Region III', 'Region IV-A (CALABARZON)'];
   final List<String> _provinces = ['Metro Manila', 'Cavite', 'Laguna', 'Batangas', 'Rizal', 'Quezon'];
   final List<String> _cities = ['Bacoor City', 'Imus City', 'Dasmariñas City', 'General Trias City', 'Trece Martires City'];
   final List<String> _barangays = ['Molino I', 'Molino II', 'Molino III', 'Panapaan I', 'Panapaan II'];
 
-  // Military/School data placeholders
-  final List<String> _schools = ['School 1', 'School 2', 'School 3', 'Philippine Military Academy'];
-  final List<String> _ranks = ['2nd Lieutenant', '1st Lieutenant', 'Captain', 'Major', 'Lieutenant Colonel', 'Colonel'];
-  final List<String> _companies = ['Alpha Company', 'Bravo Company', 'Charlie Company', 'Delta Company'];
-  final List<String> _platoons = ['1st Platoon', '2nd Platoon', '3rd Platoon', '4th Platoon'];
+  @override
+  void initState() {
+    super.initState();
+    _loadDataFromDatabase();
+  }
+
+  Future<void> _loadDataFromDatabase() async {
+    try {
+      setState(() => _isLoading = true);
+
+      // Load schools
+      final schoolsResponse = await _supabase
+          .from('schools')
+          .select('id, name')
+          .order('name');
+
+      // Load ranks
+      final ranksResponse = await _supabase
+          .from('ranks')
+          .select('id, name')
+          .order('name');
+
+      // Load companies
+      final companiesResponse = await _supabase
+          .from('companies')
+          .select('id, name, school_id')
+          .order('name');
+
+      // Load platoons
+      final platoonsResponse = await _supabase
+          .from('platoons')
+          .select('id, name, company_id')
+          .order('name');
+
+      setState(() {
+        _schools = List<Map<String, dynamic>>.from(schoolsResponse);
+        _ranks = List<Map<String, dynamic>>.from(ranksResponse);
+        _companies = List<Map<String, dynamic>>.from(companiesResponse);
+        _platoons = List<Map<String, dynamic>>.from(platoonsResponse);
+      });
+    } catch (error) {
+      setState(() {
+        _errorMessage = 'Failed to load data: $error';
+      });
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -55,8 +110,124 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     super.dispose();
   }
 
+  bool _validateCurrentStep() {
+    switch (_currentStep) {
+      case 0: // Name step
+        if (_firstNameController.text.trim().isEmpty) {
+          _showErrorSnackBar('First name is required');
+          return false;
+        }
+        if (_lastNameController.text.trim().isEmpty) {
+          _showErrorSnackBar('Last name is required');
+          return false;
+        }
+        break;
+
+      case 1: // Personal step
+        if (_selectedBirthday == null) {
+          _showErrorSnackBar('Birthday is required');
+          return false;
+        }
+        if (_selectedSex == null) {
+          _showErrorSnackBar('Sex is required');
+          return false;
+        }
+        if (_selectedRegion == null) {
+          _showErrorSnackBar('Region is required');
+          return false;
+        }
+        if (_selectedProvince == null) {
+          _showErrorSnackBar('Province is required');
+          return false;
+        }
+        if (_selectedCity == null) {
+          _showErrorSnackBar('City/Municipality is required');
+          return false;
+        }
+        if (_selectedBarangay == null) {
+          _showErrorSnackBar('Barangay is required');
+          return false;
+        }
+        break;
+
+      case 2: // Details step
+        if (_selectedSchool == null) {
+          _showErrorSnackBar('School/Institution is required');
+          return false;
+        }
+        if (_idNumberController.text.trim().isEmpty) {
+          _showErrorSnackBar('ID Number is required');
+          return false;
+        }
+        if (_selectedRank == null) {
+          _showErrorSnackBar('Rank is required');
+          return false;
+        }
+        if (_selectedCompany == null) {
+          _showErrorSnackBar('Company is required');
+          return false;
+        }
+        if (_selectedPlatoon == null) {
+          _showErrorSnackBar('Platoon is required');
+          return false;
+        }
+        break;
+    }
+    return true;
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // Get filtered companies based on selected school
+  List<Map<String, dynamic>> _getFilteredCompanies() {
+    if (_selectedSchool == null) return [];
+    
+    final selectedSchoolData = _schools.firstWhere(
+      (school) => school['name'] == _selectedSchool,
+      orElse: () => <String, dynamic>{},
+    );
+    
+    if (selectedSchoolData.isEmpty) return _companies;
+    
+    return _companies.where((company) => 
+      company['school_id'] == selectedSchoolData['id']
+    ).toList();
+  }
+
+  // Get filtered platoons based on selected company
+  List<Map<String, dynamic>> _getFilteredPlatoons() {
+    if (_selectedCompany == null) return [];
+    
+    final selectedCompanyData = _getFilteredCompanies().firstWhere(
+      (company) => company['name'] == _selectedCompany,
+      orElse: () => <String, dynamic>{},
+    );
+    
+    if (selectedCompanyData.isEmpty) return _platoons;
+    
+    return _platoons.where((platoon) => 
+      platoon['company_id'] == selectedCompanyData['id']
+    ).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isLoading && _schools.isEmpty) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF059669)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -102,6 +273,24 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ],
             ),
           ),
+
+          // Error message display
+          if (_errorMessage != null)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Text(
+                _errorMessage!,
+                style: TextStyle(color: Colors.red.shade700),
+                textAlign: TextAlign.center,
+              ),
+            ),
           
           Expanded(
             child: SingleChildScrollView(
@@ -128,7 +317,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 if (_currentStep > 0)
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => setState(() => _currentStep--),
+                      onPressed: _isLoading ? null : () => setState(() => _currentStep--),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Color(0xFF059669)),
                         padding: const EdgeInsets.symmetric(vertical: 15),
@@ -148,7 +337,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 if (_currentStep > 0) const SizedBox(width: 15),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _handleNext,
+                    onPressed: _isLoading ? null : _handleNext,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF059669),
                       padding: const EdgeInsets.symmetric(vertical: 15),
@@ -157,13 +346,22 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                       ),
                       elevation: 0,
                     ),
-                    child: Text(
-                      _currentStep < 2 ? "Next" : "Complete Profile",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Text(
+                            _currentStep < 2 ? "Next" : "Complete Profile",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -238,11 +436,11 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ),
             ),
             const SizedBox(height: 20),
-            _buildTextField(_firstNameController, "First Name", Icons.person),
+            _buildTextField(_firstNameController, "First Name *", Icons.person, required: true),
             const SizedBox(height: 15),
             _buildTextField(_middleNameController, "Middle Name", Icons.person_outline),
             const SizedBox(height: 15),
-            _buildTextField(_lastNameController, "Last Name", Icons.person),
+            _buildTextField(_lastNameController, "Last Name *", Icons.person, required: true),
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedExtension,
@@ -293,7 +491,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                       child: Text(
                         _selectedBirthday != null
                             ? "${_selectedBirthday!.month.toString().padLeft(2, '0')}/${_selectedBirthday!.day.toString().padLeft(2, '0')}/${_selectedBirthday!.year}"
-                            : "Select Birthday",
+                            : "Select Birthday *",
                         style: TextStyle(
                           fontSize: 16,
                           color: _selectedBirthday != null ? Colors.black : Colors.grey[600],
@@ -309,9 +507,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
             _buildDropdown(
               value: _selectedSex,
               items: _sexOptions,
-              hint: "Sex",
+              hint: "Sex *",
               icon: Icons.wc,
               onChanged: (value) => setState(() => _selectedSex = value),
+              required: true,
             ),
             const SizedBox(height: 20),
             
@@ -328,33 +527,37 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
             _buildDropdown(
               value: _selectedRegion,
               items: _regions,
-              hint: "Region",
+              hint: "Region *",
               icon: Icons.map,
               onChanged: (value) => setState(() => _selectedRegion = value),
+              required: true,
             ),
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedProvince,
               items: _provinces,
-              hint: "Province",
+              hint: "Province *",
               icon: Icons.location_city,
               onChanged: (value) => setState(() => _selectedProvince = value),
+              required: true,
             ),
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedCity,
               items: _cities,
-              hint: "City/Municipality",
+              hint: "City/Municipality *",
               icon: Icons.location_on,
               onChanged: (value) => setState(() => _selectedCity = value),
+              required: true,
             ),
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedBarangay,
               items: _barangays,
-              hint: "Barangay",
+              hint: "Barangay *",
               icon: Icons.home,
               onChanged: (value) => setState(() => _selectedBarangay = value),
+              required: true,
             ),
           ],
         ),
@@ -382,36 +585,53 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
             const SizedBox(height: 20),
             _buildDropdown(
               value: _selectedSchool,
-              items: _schools,
-              hint: "School/Institution",
+              items: _schools.map((school) => school['name'] as String).toList(),
+              hint: "School/Institution *",
               icon: Icons.school,
-              onChanged: (value) => setState(() => _selectedSchool = value),
+              onChanged: (value) {
+                setState(() {
+                  _selectedSchool = value;
+                  // Reset dependent dropdowns
+                  _selectedCompany = null;
+                  _selectedPlatoon = null;
+                });
+              },
+              required: true,
             ),
             const SizedBox(height: 15),
-            _buildTextField(_idNumberController, "ID Number", Icons.badge),
+            _buildTextField(_idNumberController, "ID Number *", Icons.badge, required: true),
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedRank,
-              items: _ranks,
-              hint: "Rank",
+              items: _ranks.map((rank) => rank['name'] as String).toList(),
+              hint: "Rank *",
               icon: Icons.military_tech,
               onChanged: (value) => setState(() => _selectedRank = value),
+              required: true,
             ),
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedCompany,
-              items: _companies,
-              hint: "Company",
+              items: _getFilteredCompanies().map((company) => company['name'] as String).toList(),
+              hint: "Company *",
               icon: Icons.group,
-              onChanged: (value) => setState(() => _selectedCompany = value),
+              onChanged: (value) {
+                setState(() {
+                  _selectedCompany = value;
+                  // Reset dependent dropdown
+                  _selectedPlatoon = null;
+                });
+              },
+              required: true,
             ),
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedPlatoon,
-              items: _platoons,
-              hint: "Platoon",
+              items: _getFilteredPlatoons().map((platoon) => platoon['name'] as String).toList(),
+              hint: "Platoon *",
               icon: Icons.groups,
               onChanged: (value) => setState(() => _selectedPlatoon = value),
+              required: true,
             ),
           ],
         ),
@@ -419,7 +639,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool required = false}) {
     return TextField(
       controller: controller,
       decoration: InputDecoration(
@@ -431,7 +651,12 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF059669), width: 2),
+          borderSide: BorderSide(
+            color: required && controller.text.trim().isEmpty 
+                ? Colors.red 
+                : const Color(0xFF059669), 
+            width: 2
+          ),
         ),
         filled: true,
         fillColor: Colors.grey[50],
@@ -445,6 +670,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     required String hint,
     required IconData icon,
     required ValueChanged<String?> onChanged,
+    bool required = false,
   }) {
     return DropdownButtonFormField<String>(
       value: value,
@@ -457,7 +683,12 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF059669), width: 2),
+          borderSide: BorderSide(
+            color: required && value == null 
+                ? Colors.red 
+                : const Color(0xFF059669), 
+            width: 2
+          ),
         ),
         filled: true,
         fillColor: Colors.grey[50],
@@ -497,6 +728,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   }
 
   void _handleNext() {
+    if (!_validateCurrentStep()) return;
+
     if (_currentStep < 2) {
       setState(() => _currentStep++);
     } else {
@@ -504,104 +737,70 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     }
   }
 
-  void _finishSetup() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Color(0xFF059669), size: 30),
-            SizedBox(width: 10),
-            Text("Profile Completed"),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "Please review your information:",
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 15),
-              
-              _buildSummarySection("Name", [
-                "First Name: ${_firstNameController.text}",
-                "Middle Name: ${_middleNameController.text}",
-                "Last Name: ${_lastNameController.text}",
-                if (_selectedExtension != null) "Extension: $_selectedExtension",
-              ]),
-              
-              _buildSummarySection("Personal Information", [
-                if (_selectedBirthday != null) 
-                  "Birthday: ${_selectedBirthday!.month.toString().padLeft(2, '0')}/${_selectedBirthday!.day.toString().padLeft(2, '0')}/${_selectedBirthday!.year}",
-                if (_selectedSex != null) "Sex: $_selectedSex",
-                if (_selectedRegion != null) "Region: $_selectedRegion",
-                if (_selectedProvince != null) "Province: $_selectedProvince",
-                if (_selectedCity != null) "City: $_selectedCity",
-                if (_selectedBarangay != null) "Barangay: $_selectedBarangay",
-              ]),
-              
-              _buildSummarySection("Military/Academic Details", [
-                if (_selectedSchool != null) "School: $_selectedSchool",
-                "ID Number: ${_idNumberController.text}",
-                if (_selectedRank != null) "Rank: $_selectedRank",
-                if (_selectedCompany != null) "Company: $_selectedCompany",
-                if (_selectedPlatoon != null) "Platoon: $_selectedPlatoon",
-              ]),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Edit", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // close dialog first
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const MainScreen()),
-    );
+  Future<void> _finishSetup() async {
+    if (!_validateCurrentStep()) return;
 
-            },
-            style: ElevatedButton.styleFrom(
-              
-              backgroundColor: const Color(0xFF059669),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text("Confirm", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-  Widget _buildSummarySection(String title, List<String> items) {
-    if (items.isEmpty) return const SizedBox.shrink();
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF059669),
-          ),
-        ),
-        const SizedBox(height: 5),
-        ...items.map((item) => Padding(
-          padding: const EdgeInsets.only(left: 10, bottom: 2),
-          child: Text("• $item", style: const TextStyle(fontSize: 14)),
-        )),
-        const SizedBox(height: 10),
-      ],
-    );
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        throw Exception('No authenticated user found');
+      }
+
+      // Get IDs for foreign keys
+      final selectedSchoolData = _schools.firstWhere(
+        (school) => school['name'] == _selectedSchool
+      );
+      final selectedRankData = _ranks.firstWhere(
+        (rank) => rank['name'] == _selectedRank
+      );
+      final selectedCompanyData = _getFilteredCompanies().firstWhere(
+        (company) => company['name'] == _selectedCompany
+      );
+      final selectedPlatoonData = _getFilteredPlatoons().firstWhere(
+        (platoon) => platoon['name'] == _selectedPlatoon
+      );
+
+      // Update users table with profile data
+      await _supabase.from('users').update({
+        'firstname': _firstNameController.text.trim(),
+        'middlename': _middleNameController.text.trim().isEmpty 
+            ? null 
+            : _middleNameController.text.trim(),
+        'lastname': _lastNameController.text.trim(),
+        'extensionname': _selectedExtension,
+        'birthdate': _selectedBirthday!.toIso8601String().split('T')[0],
+        'sex': _selectedSex,
+        'region': _selectedRegion,
+        'province': _selectedProvince,
+        'city': _selectedCity,
+        'barangay': _selectedBarangay,
+        'school_id': selectedSchoolData['id'],
+        'student_id': _idNumberController.text.trim(),
+        'rank_id': selectedRankData['id'],
+        'company_id': selectedCompanyData['id'],
+        'platoon_id': selectedPlatoonData['id'],
+        'is_configured': true, // Mark as configured
+      }).eq('id', user.id);
+
+      // Navigate to main screen
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      }
+
+    } catch (error) {
+      setState(() {
+        _errorMessage = 'Failed to save profile: $error';
+      });
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 }

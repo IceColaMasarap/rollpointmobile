@@ -49,62 +49,72 @@ class _RegisterPageState extends State<RegisterPage>
     super.dispose();
   }
 
-  Future<void> _handleRegister() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (!_agreeTerms) {
-      setState(() {
-        _errorMessage = "You must agree to the Terms and Conditions";
-      });
-      return;
-    }
-
+Future<void> _handleRegister() async {
+  if (!_formKey.currentState!.validate()) return;
+  if (!_agreeTerms) {
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _successMessage = null;
+      _errorMessage = "You must agree to the Terms and Conditions";
     });
-
-    try {
-      // Sign up with Supabase with improved error handling
-      final response = await _supabase.auth.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      if (response.user != null) {
-        setState(() {
-          _successMessage = "Account created successfully! Please check your email for verification.";
-        });
-        
-        // Show verification modal
-        _showVerificationModal();
-      } else if (response.session == null) {
-        setState(() {
-          _successMessage = "Account created! Please check your email for verification.";
-        });
-        _showVerificationModal();
-      }
-    } on AuthException catch (authError) {
-      setState(() {
-        if (authError.message.toLowerCase().contains('email')) {
-          _errorMessage = "Registration failed: This email is already registered or invalid";
-        } else if (authError.message.toLowerCase().contains('password')) {
-          _errorMessage = "Registration failed: Password does not meet requirements";
-        } else {
-          _errorMessage = "Registration failed: ${authError.message}";
-        }
-      });
-    } catch (error) {
-      setState(() {
-        _errorMessage = "Registration failed: An unexpected error occurred. Please try again.";
-      });
-      print("Registration error: $error"); // For debugging
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+    return;
   }
+
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+    _successMessage = null;
+  });
+
+  try {
+    final response = await _supabase.auth.signUp(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    if (response.user != null) {
+      // ✅ Insert into users table
+      await _supabase.from('users').insert({
+        'id': response.user!.id,          // same as auth UID
+        'email': response.user!.email,    // store email
+        'is_configured': false,           // default until profile setup
+      });
+
+      setState(() {
+        _successMessage =
+            "Account created successfully! Please check your email for verification.";
+      });
+      _showVerificationModal();
+    } else if (response.session == null) {
+      setState(() {
+        _successMessage =
+            "Account created! Please check your email for verification.";
+      });
+      _showVerificationModal();
+    }
+  } on AuthException catch (authError) {
+    setState(() {
+      if (authError.message.toLowerCase().contains('email')) {
+        _errorMessage =
+            "Registration failed: This email is already registered or invalid";
+      } else if (authError.message.toLowerCase().contains('password')) {
+        _errorMessage =
+            "Registration failed: Password does not meet requirements";
+      } else {
+        _errorMessage = "Registration failed: ${authError.message}";
+      }
+    });
+  } catch (error) {
+    setState(() {
+      _errorMessage =
+          "Registration failed: An unexpected error occurred. Please try again.";
+    });
+    print("Registration error: $error");
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
+
 
   void _showVerificationModal() {
     showDialog(
