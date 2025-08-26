@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'widgets/camouflage_background.dart';
 
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({Key? key}) : super(key: key);
+  const RegisterPage({super.key});
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -194,21 +194,22 @@ class _RegisterPageState extends State<RegisterPage>
             child: FadeTransition(
               opacity: _fadeAnimation,
               child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWideScreen = constraints.maxWidth > 768;
-                  return Container(
-                    margin: isWideScreen
-                        ? const EdgeInsets.all(20)
-                        : EdgeInsets.zero,
-                    constraints: isWideScreen
-                        ? const BoxConstraints(maxWidth: 1000)
-                        : const BoxConstraints.expand(),
-                    child: isWideScreen
-                        ? _buildWideLayout()
-                        : _buildNarrowLayout(),
-                  );
-                },
-              ),
+              builder: (context, constraints) {
+                final isWideScreen = constraints.maxWidth > 768;
+                return Container(
+                  margin: isWideScreen
+                      ? const EdgeInsets.all(20)
+                      : EdgeInsets.zero,
+                  constraints: isWideScreen
+                      ? const BoxConstraints(maxWidth: 1000)
+                      : const BoxConstraints.expand(),
+                  child: isWideScreen
+                      ? _buildWideLayout(isWideScreen)
+                      : _buildNarrowLayout(isWideScreen),
+                );
+              },
+            ),
+
             ),
           ),
         ),
@@ -216,47 +217,56 @@ class _RegisterPageState extends State<RegisterPage>
     );
   }
 
-  Widget _buildWideLayout() {
-    return _cardWrapper(
-      Row(
+  Widget _buildWideLayout(bool isWideScreen) {
+  return _cardWrapper(
+    Row(
+      children: [
+        Expanded(child: _buildLeftSide()),
+        Expanded(child: _buildRightSide()),
+      ],
+    ),
+    isWideScreen,
+  );
+}
+
+
+  Widget _buildNarrowLayout(bool isWideScreen) {
+  return _cardWrapper(
+    SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(child: _buildLeftSide()),
-          Expanded(child: _buildRightSide()),
+          SizedBox(height: 180, child: _buildLeftSide(compact: true)),
+          _buildRightSide(compact: true),
         ],
       ),
-    );
-  }
+    ),
+    isWideScreen,
+  );
+}
 
-  Widget _buildNarrowLayout() {
-    return _cardWrapper(
-      SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(height: 180, child: _buildLeftSide(compact: true)),
-            _buildRightSide(compact: true),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _cardWrapper(Widget child) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 25,
-            offset: const Offset(0, 20),
-          ),
-        ],
-      ),
-      child: ClipRRect(borderRadius: BorderRadius.circular(16), child: child),
-    );
-  }
+  Widget _cardWrapper(Widget child, bool isWideScreen) {
+  final borderRadius = isWideScreen ? BorderRadius.circular(16) : BorderRadius.zero;
+
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: borderRadius,
+      boxShadow: isWideScreen
+          ? [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 25,
+                offset: const Offset(0, 20),
+              ),
+            ]
+          : [],
+    ),
+    child: ClipRRect(borderRadius: borderRadius, child: child),
+  );
+}
+
 
   Widget _buildLeftSide({bool compact = false}) {
     return CamouflageBackground(
@@ -266,17 +276,13 @@ class _RegisterPageState extends State<RegisterPage>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('📝', style: TextStyle(fontSize: 32)),
-              const SizedBox(height: 10),
-              Text(
-                'Create Account',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: compact ? 28 : 36,
-                  fontWeight: FontWeight.w800,
-                ),
+              Image.asset(
+                'lib/assets/logoName1.png', // or 'assets/logoName.png' if you follow convention
+                height: compact
+                    ? 70
+                    : 110, // adjust size to match old text size
               ),
-              const SizedBox(height: 15),
+              SizedBox(height: 16),
               Text(
                 'Join Attendeee and manage attendance effortlessly!',
                 textAlign: TextAlign.center,

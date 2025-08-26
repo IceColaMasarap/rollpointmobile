@@ -6,7 +6,7 @@ import 'ProfileSetupPage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -99,11 +99,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFf0fdf4), Color(0xFFecfdf5)],
-          ),
+          color: Colors.white
         ),
         child: SafeArea(
           child: LayoutBuilder(
@@ -181,22 +177,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('🎓', style: TextStyle(fontSize: 32)),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Attendeee',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: compact ? 32 : 40,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
+              Image.asset(
+                'lib/assets/logoName1.png', // or 'assets/logoName.png' if you follow convention
+                height: compact
+                    ? 70
+                    : 110, // adjust size to match old text size
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: 16),
+
               Text(
                 'Streamline attendance tracking with smart QR technology',
                 style: TextStyle(

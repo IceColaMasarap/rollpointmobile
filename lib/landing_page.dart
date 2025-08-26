@@ -4,7 +4,7 @@ import 'login_page.dart';
 import 'widgets/camouflage_background.dart';
 
 class LandingPage extends StatelessWidget {
-  const LandingPage({Key? key}) : super(key: key);
+  const LandingPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -16,8 +16,13 @@ class LandingPage extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                Image.asset(
+                  'lib/assets/logoR.png', // or 'assets/logoR.png' if you moved it
+                  height: 100, // adjust size as needed
+                ),
+                const SizedBox(height: 16),
                 const Text(
-                  "Attendeee",
+                  "RollPoint",
                   style: TextStyle(
                     fontSize: 42,
                     fontWeight: FontWeight.bold,
@@ -56,10 +61,7 @@ class LandingPage extends StatelessWidget {
                   },
                   child: const Text(
                     "Get Started",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],

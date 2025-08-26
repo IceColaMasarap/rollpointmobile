@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class CamouflageBackground extends StatelessWidget {
   final Widget child;
-  const CamouflageBackground({Key? key, required this.child}) : super(key: key);
+  const CamouflageBackground({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {

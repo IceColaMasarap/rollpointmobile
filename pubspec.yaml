@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   supabase_flutter: ^2.9.1
+  ph_address_picker: ^1.0.1
 
 dev_dependencies:
   flutter_test:
@@ -18,3 +19,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - lib/assets/logoR.png
+    - lib/assets/logoName1.png

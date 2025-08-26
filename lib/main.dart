@@ -18,7 +18,7 @@ Future<void> main() async {
 }
 
 class AttendeeApp extends StatelessWidget {
-  const AttendeeApp({Key? key}) : super(key: key);
+  const AttendeeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
