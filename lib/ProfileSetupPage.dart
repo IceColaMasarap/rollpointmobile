@@ -133,12 +133,12 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
       final companiesResponse = await _supabase
           .from('companies')
-          .select('id, name, school_id')
+          .select('id, name')
           .order('name');
 
       final platoonsResponse = await _supabase
           .from('platoons')
-          .select('id, name, company_id')
+          .select('id, name')
           .order('name');
 
       setState(() {
@@ -1099,8 +1099,123 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     if (_currentStep < 2) {
       setState(() => _currentStep++);
     } else {
-      _finishSetup();
+      _showConfirmationDialog();
     }
+  }
+
+  void _showConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Confirm Your Information',
+            style: TextStyle(
+              color: Color(0xFF059669),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Please review your information before submitting:',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 20),
+                
+                // Personal Name Section
+                _buildConfirmationSection('Personal Name', [
+                  'First Name: ${_firstNameController.text.trim()}',
+                  if (_middleNameController.text.trim().isNotEmpty) 
+                    'Middle Name: ${_middleNameController.text.trim()}',
+                  'Last Name: ${_lastNameController.text.trim()}',
+                  if (_selectedExtension != null) 
+                    'Extension: $_selectedExtension',
+                ]),
+                
+                const SizedBox(height: 15),
+                
+                // Personal Information Section
+                _buildConfirmationSection('Personal Information', [
+                  'Birthday: ${_selectedBirthday!.month.toString().padLeft(2, '0')}/${_selectedBirthday!.day.toString().padLeft(2, '0')}/${_selectedBirthday!.year}',
+                  'Sex: $_selectedSex',
+                ]),
+                
+                const SizedBox(height: 15),
+                
+                // Address Section
+                _buildConfirmationSection('Address', [
+                  'Region: $_selectedRegion',
+                  'Province: $_selectedProvince',
+                  'City: $_selectedCity',
+                  'Barangay: $_selectedBarangay',
+                ]),
+                
+                const SizedBox(height: 15),
+                
+                // Military/Academic Details Section
+                _buildConfirmationSection('Military/Academic Details', [
+                  'School: $_selectedSchool',
+                  'ID Number: ${_idNumberController.text.trim()}',
+                  'Rank: $_selectedRank',
+                  'Company: $_selectedCompany',
+                  'Platoon: $_selectedPlatoon',
+                ]),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Edit',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _finishSetup();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+              ),
+              child: const Text(
+                'Confirm & Submit',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildConfirmationSection(String title, List<String> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF059669),
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 5),
+        ...items.map((item) => Padding(
+          padding: const EdgeInsets.only(left: 10, bottom: 2),
+          child: Text(
+            item,
+            style: const TextStyle(fontSize: 13),
+          ),
+        )),
+      ],
+    );
   }
 
   Future<void> _finishSetup() async {
