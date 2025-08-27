@@ -569,7 +569,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
   String _getStepSubtitle() {
     switch (_currentStep) {
       case 0:
-        return 'Enter your email address to receive a verification code';
+        return 'Enter your email address to receive an OTP';
       case 1:
         return 'Check your email for the verification code';
       case 2:
