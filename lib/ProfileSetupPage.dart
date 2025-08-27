@@ -1125,37 +1125,37 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   style: TextStyle(fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 20),
-                
+
                 // Personal Name Section
                 _buildConfirmationSection('Personal Name', [
                   'First Name: ${_firstNameController.text.trim()}',
-                  if (_middleNameController.text.trim().isNotEmpty) 
+                  if (_middleNameController.text.trim().isNotEmpty)
                     'Middle Name: ${_middleNameController.text.trim()}',
                   'Last Name: ${_lastNameController.text.trim()}',
-                  if (_selectedExtension != null) 
+                  if (_selectedExtension != null)
                     'Extension: $_selectedExtension',
                 ]),
-                
+
                 const SizedBox(height: 15),
-                
+
                 // Personal Information Section
                 _buildConfirmationSection('Personal Information', [
                   'Birthday: ${_selectedBirthday!.month.toString().padLeft(2, '0')}/${_selectedBirthday!.day.toString().padLeft(2, '0')}/${_selectedBirthday!.year}',
                   'Sex: $_selectedSex',
                 ]),
-                
+
                 const SizedBox(height: 15),
-                
+
                 // Address Section
                 _buildConfirmationSection('Address', [
-                  'Region: $_selectedRegion',
-                  'Province: $_selectedProvince',
-                  'City: $_selectedCity',
-                  'Barangay: $_selectedBarangay',
+                  'Region: _selectedRegion',
+                  'Province: _selectedProvince',
+                  'City: _selectedCity',
+                  'Barangay: _selectedBarangay',
                 ]),
-                
+
                 const SizedBox(height: 15),
-                
+
                 // Military/Academic Details Section
                 _buildConfirmationSection('Military/Academic Details', [
                   'School: $_selectedSchool',
@@ -1170,10 +1170,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Edit',
-                style: TextStyle(color: Colors.grey),
-              ),
+              child: const Text('Edit', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -1207,13 +1204,12 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           ),
         ),
         const SizedBox(height: 5),
-        ...items.map((item) => Padding(
-          padding: const EdgeInsets.only(left: 10, bottom: 2),
-          child: Text(
-            item,
-            style: const TextStyle(fontSize: 13),
+        ...items.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(left: 10, bottom: 2),
+            child: Text(item, style: const TextStyle(fontSize: 13)),
           ),
-        )),
+        ),
       ],
     );
   }
