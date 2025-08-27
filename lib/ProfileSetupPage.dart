@@ -27,6 +27,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   String? _selectedCity;
   String? _selectedBarangay;
 
+  String? _selectedSchool;
   final _idNumberController = TextEditingController();
   String? _selectedRank;
   String? _selectedCompany;
@@ -34,6 +35,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
+  List<Map<String, dynamic>> _schools = [];
   List<Map<String, dynamic>> _ranks = [];
   List<Map<String, dynamic>> _companies = [];
   List<Map<String, dynamic>> _platoons = [];
@@ -42,7 +44,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final List<String> _extensions = ['Jr.', 'Sr.', 'II', 'III', 'IV'];
   final List<String> _sexOptions = ['Male', 'Female'];
   
-  // Philippine Address data (you might want to load these from DB too)
+  // Philippine Address data
   final List<String> _regions = ['NCR', 'CAR', 'Region I', 'Region II', 'Region III', 'Region IV-A (CALABARZON)'];
   final List<String> _provinces = ['Metro Manila', 'Cavite', 'Laguna', 'Batangas', 'Rizal', 'Quezon'];
   final List<String> _cities = ['Bacoor City', 'Imus City', 'Dasmariñas City', 'General Trias City', 'Trece Martires City'];
@@ -57,6 +59,12 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   Future<void> _loadDataFromDatabase() async {
     try {
       setState(() => _isLoading = true);
+
+      // Load schools
+      final schoolsResponse = await _supabase
+          .from('schools')
+          .select('id, name')
+          .order('name');
 
       // Load ranks
       final ranksResponse = await _supabase
@@ -77,6 +85,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           .order('name');
 
       setState(() {
+        _schools = List<Map<String, dynamic>>.from(schoolsResponse);
         _ranks = List<Map<String, dynamic>>.from(ranksResponse);
         _companies = List<Map<String, dynamic>>.from(companiesResponse);
         _platoons = List<Map<String, dynamic>>.from(platoonsResponse);
@@ -140,6 +149,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         break;
 
       case 2: // Details step
+        if (_selectedSchool == null) {
+          _showErrorSnackBar('School/Institution is required');
+          return false;
+        }
         if (_idNumberController.text.trim().isEmpty) {
           _showErrorSnackBar('ID Number is required');
           return false;
@@ -171,14 +184,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     );
   }
 
-  // Get all platoons (no filtering needed since no company relationship)
-  List<Map<String, dynamic>> _getAllPlatoons() {
-    return _platoons;
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_isLoading && _companies.isEmpty) {
+    if (_isLoading && _schools.isEmpty) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFF059669)),
@@ -541,6 +549,15 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ),
             ),
             const SizedBox(height: 20),
+            _buildDropdown(
+              value: _selectedSchool,
+              items: _schools.map((school) => school['name'] as String).toList(),
+              hint: "School/Institution *",
+              icon: Icons.school,
+              onChanged: (value) => setState(() => _selectedSchool = value),
+              required: true,
+            ),
+            const SizedBox(height: 15),
             _buildTextField(_idNumberController, "ID Number *", Icons.badge, required: true),
             const SizedBox(height: 15),
             _buildDropdown(
@@ -563,7 +580,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedPlatoon,
-              items: _getAllPlatoons().map((platoon) => platoon['name'] as String).toList(),
+              items: _platoons.map((platoon) => platoon['name'] as String).toList(),
               hint: "Platoon *",
               icon: Icons.groups,
               onChanged: (value) => setState(() => _selectedPlatoon = value),
@@ -669,8 +686,123 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     if (_currentStep < 2) {
       setState(() => _currentStep++);
     } else {
-      _finishSetup();
+      _showConfirmationDialog();
     }
+  }
+
+  void _showConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Confirm Your Information',
+            style: TextStyle(
+              color: Color(0xFF059669),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Please review your information before submitting:',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 20),
+                
+                // Personal Name Section
+                _buildConfirmationSection('Personal Name', [
+                  'First Name: ${_firstNameController.text.trim()}',
+                  if (_middleNameController.text.trim().isNotEmpty) 
+                    'Middle Name: ${_middleNameController.text.trim()}',
+                  'Last Name: ${_lastNameController.text.trim()}',
+                  if (_selectedExtension != null) 
+                    'Extension: $_selectedExtension',
+                ]),
+                
+                const SizedBox(height: 15),
+                
+                // Personal Information Section
+                _buildConfirmationSection('Personal Information', [
+                  'Birthday: ${_selectedBirthday!.month.toString().padLeft(2, '0')}/${_selectedBirthday!.day.toString().padLeft(2, '0')}/${_selectedBirthday!.year}',
+                  'Sex: $_selectedSex',
+                ]),
+                
+                const SizedBox(height: 15),
+                
+                // Address Section
+                _buildConfirmationSection('Address', [
+                  'Region: $_selectedRegion',
+                  'Province: $_selectedProvince',
+                  'City: $_selectedCity',
+                  'Barangay: $_selectedBarangay',
+                ]),
+                
+                const SizedBox(height: 15),
+                
+                // Military/Academic Details Section
+                _buildConfirmationSection('Military/Academic Details', [
+                  'School: $_selectedSchool',
+                  'ID Number: ${_idNumberController.text.trim()}',
+                  'Rank: $_selectedRank',
+                  'Company: $_selectedCompany',
+                  'Platoon: $_selectedPlatoon',
+                ]),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Edit',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _finishSetup();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+              ),
+              child: const Text(
+                'Confirm & Submit',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildConfirmationSection(String title, List<String> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF059669),
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 5),
+        ...items.map((item) => Padding(
+          padding: const EdgeInsets.only(left: 10, bottom: 2),
+          child: Text(
+            item,
+            style: const TextStyle(fontSize: 13),
+          ),
+        )),
+      ],
+    );
   }
 
   Future<void> _finishSetup() async {
@@ -688,13 +820,16 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       }
 
       // Get IDs for foreign keys
+      final selectedSchoolData = _schools.firstWhere(
+        (school) => school['name'] == _selectedSchool
+      );
       final selectedRankData = _ranks.firstWhere(
         (rank) => rank['name'] == _selectedRank
       );
       final selectedCompanyData = _companies.firstWhere(
         (company) => company['name'] == _selectedCompany
       );
-      final selectedPlatoonData = _getAllPlatoons().firstWhere(
+      final selectedPlatoonData = _platoons.firstWhere(
         (platoon) => platoon['name'] == _selectedPlatoon
       );
 
@@ -720,6 +855,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         'birthdate': _selectedBirthday!.toIso8601String().split('T')[0],
         'sex': _selectedSex,
         'address_id': addressId,
+        'school_id': selectedSchoolData['id'],
         'student_id': _idNumberController.text.trim(),
         'rank_id': selectedRankData['id'],
         'company_id': selectedCompanyData['id'],
