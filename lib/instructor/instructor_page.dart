@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../widgets/camouflage_background.dart';
+// Import the new pages
+import 'view_platoons_page.dart';
+import 'attendance_log_page.dart';
 
 class InstructorPage extends StatelessWidget {
   const InstructorPage({super.key});
@@ -173,45 +176,29 @@ class InstructorPage extends StatelessWidget {
                     
                     const SizedBox(height: 16),
                     
-                    // Action Buttons Grid
+                    // Action Buttons - Two Column Layout
                     Row(
                       children: [
                         Expanded(
                           child: _buildActionCard(
+                            context: context,
                             title: 'View Platoons',
                             subtitle: 'Manage student groups',
                             icon: Icons.group,
                             color: const Color(0xFF059669),
+                            isExpanded: true,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 16),
                         Expanded(
                           child: _buildActionCard(
+                            context: context,
                             title: 'Attendance Log',
-                            subtitle: 'View detailed records',
+                            subtitle: 'View & export records',
                             icon: Icons.assignment,
                             color: const Color(0xFF3B82F6),
+                            isExpanded: true,
                           ),
-                        ),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 12),
-                    
-                    // Single action card centered
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildActionCard(
-                            title: 'Generate Report',
-                            subtitle: 'Export attendance data',
-                            icon: Icons.analytics,
-                            color: const Color(0xFFF59E0B),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Container(), // Empty space for symmetry
                         ),
                       ],
                     ),
@@ -232,7 +219,13 @@ class InstructorPage extends StatelessWidget {
                         ),
                         TextButton(
                           onPressed: () {
-                            // Handle view all
+                            // Navigate to Attendance Log
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const AttendanceLogPage(),
+                              ),
+                            );
                           },
                           child: const Text(
                             'View All',
@@ -248,11 +241,11 @@ class InstructorPage extends StatelessWidget {
 
                     const SizedBox(height: 16),
 
-                    // Recent Activity Items
+                    // Recent Activity Items - Updated to not show "Checked in"
                     _buildActivityItem(
                       studentName: 'Sean Derick',
                       studentId: '2023-77144-ABCD',
-                      action: 'Checked in',
+                      action: 'Present',
                       time: '2 minutes ago',
                       status: 'present',
                     ),
@@ -262,7 +255,7 @@ class InstructorPage extends StatelessWidget {
                     _buildActivityItem(
                       studentName: 'Maria Santos',
                       studentId: '2023-77145-EFGH',
-                      action: 'Checked in',
+                      action: 'Present',
                       time: '5 minutes ago',
                       status: 'present',
                     ),
@@ -272,9 +265,9 @@ class InstructorPage extends StatelessWidget {
                     _buildActivityItem(
                       studentName: 'John Cruz',
                       studentId: '2023-77146-IJKL',
-                      action: 'Late arrival',
+                      action: 'Absent',
                       time: '15 minutes ago',
-                      status: 'late',
+                      status: 'absent',
                     ),
 
                     const SizedBox(height: 40),
@@ -337,54 +330,71 @@ class InstructorPage extends StatelessWidget {
   }
 
   Widget _buildActionCard({
+    required BuildContext context,
     required String title,
     required String subtitle,
     required IconData icon,
     required Color color,
+    bool isExpanded = false,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 5,
-            offset: const Offset(0, 1),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           onTap: () {
             // Handle action tap
+            if (title == 'View Platoons') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ViewPlatoonsPage(),
+                ),
+              );
+            } else if (title == 'Attendance Log') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AttendanceLogPage(),
+                ),
+              );
+            }
           },
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 50,
+                  height: 50,
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     icon,
                     color: color,
-                    size: 20,
+                    size: 24,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF374151),
                   ),
@@ -393,7 +403,7 @@ class InstructorPage extends StatelessWidget {
                 Text(
                   subtitle,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 14,
                     color: Color(0xFF6B7280),
                   ),
                 ),
@@ -422,12 +432,7 @@ class InstructorPage extends StatelessWidget {
         statusBg = const Color(0xFFDCFCE7);
         statusIcon = Icons.check_circle;
         break;
-      case 'late':
-        statusColor = const Color(0xFFF59E0B);
-        statusBg = const Color(0xFFFEF3C7);
-        statusIcon = Icons.schedule;
-        break;
-      default:
+      default: // absent
         statusColor = const Color(0xFFEF4444);
         statusBg = const Color(0xFFFEE2E2);
         statusIcon = Icons.cancel;
