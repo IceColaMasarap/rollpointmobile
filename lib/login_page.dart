@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/instructor/instructor_main_screen.dart';
 import 'widgets/camouflage_background.dart';
 import 'register_page.dart';
 import 'forgot_password_page.dart';
@@ -70,29 +71,37 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         });
 
         // Check if user profile is configured
-        final userResponse = await _supabase
-            .from('users')
-            .select('is_configured')
-            .eq('id', response.user!.id)
-            .single();
+final userResponse = await _supabase
+    .from('users')
+    .select('is_configured, role')
+    .eq('id', response.user!.id)
+    .single();
 
-        final bool isConfigured = userResponse['is_configured'] ?? false;
+final bool isConfigured = userResponse['is_configured'] ?? false;
+final String userRole = userResponse['role'] ?? 'Student';
 
-        Future.delayed(const Duration(milliseconds: 1200), () {
-          if (isConfigured) {
-            // User has completed profile setup, go to main screen
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const MainScreen()),
-            );
-          } else {
-            // User needs to complete profile setup
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
-            );
-          }
-        });
+Future.delayed(const Duration(milliseconds: 1200), () {
+  if (!isConfigured) {
+    // User needs to complete profile setup
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
+    );
+  } else if (userRole == 'Instructor') {
+    // Redirect to instructor page
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const InstructorMainScreen()),
+    );
+  } else {
+    // Regular student user, go to main screen
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainScreen()),
+    );
+  }
+});
+
       } else {
         setState(() {
           _errorMessage = "Login failed: No active session.";

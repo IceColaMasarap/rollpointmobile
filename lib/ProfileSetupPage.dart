@@ -27,17 +27,13 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   String? _selectedCity;
   String? _selectedBarangay;
 
-  String? _selectedSchool;
   final _idNumberController = TextEditingController();
   String? _selectedRank;
   String? _selectedCompany;
   String? _selectedPlatoon;
 
-
   SupabaseClient get _supabase => Supabase.instance.client;
 
-
-  List<Map<String, dynamic>> _schools = [];
   List<Map<String, dynamic>> _ranks = [];
   List<Map<String, dynamic>> _companies = [];
   List<Map<String, dynamic>> _platoons = [];
@@ -62,12 +58,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     try {
       setState(() => _isLoading = true);
 
-      // Load schools
-      final schoolsResponse = await _supabase
-          .from('schools')
-          .select('id, name')
-          .order('name');
-
       // Load ranks
       final ranksResponse = await _supabase
           .from('ranks')
@@ -77,17 +67,16 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       // Load companies
       final companiesResponse = await _supabase
           .from('companies')
-          .select('id, name, school_id')
+          .select('id, name')
           .order('name');
 
       // Load platoons
       final platoonsResponse = await _supabase
           .from('platoons')
-          .select('id, name, company_id')
+          .select('id, name')
           .order('name');
 
       setState(() {
-        _schools = List<Map<String, dynamic>>.from(schoolsResponse);
         _ranks = List<Map<String, dynamic>>.from(ranksResponse);
         _companies = List<Map<String, dynamic>>.from(companiesResponse);
         _platoons = List<Map<String, dynamic>>.from(platoonsResponse);
@@ -151,10 +140,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         break;
 
       case 2: // Details step
-        if (_selectedSchool == null) {
-          _showErrorSnackBar('School/Institution is required');
-          return false;
-        }
         if (_idNumberController.text.trim().isEmpty) {
           _showErrorSnackBar('ID Number is required');
           return false;
@@ -186,41 +171,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     );
   }
 
-  // Get filtered companies based on selected school
-  List<Map<String, dynamic>> _getFilteredCompanies() {
-    if (_selectedSchool == null) return [];
-    
-    final selectedSchoolData = _schools.firstWhere(
-      (school) => school['name'] == _selectedSchool,
-      orElse: () => <String, dynamic>{},
-    );
-    
-    if (selectedSchoolData.isEmpty) return _companies;
-    
-    return _companies.where((company) => 
-      company['school_id'] == selectedSchoolData['id']
-    ).toList();
-  }
-
-  // Get filtered platoons based on selected company
-  List<Map<String, dynamic>> _getFilteredPlatoons() {
-    if (_selectedCompany == null) return [];
-    
-    final selectedCompanyData = _getFilteredCompanies().firstWhere(
-      (company) => company['name'] == _selectedCompany,
-      orElse: () => <String, dynamic>{},
-    );
-    
-    if (selectedCompanyData.isEmpty) return _platoons;
-    
-    return _platoons.where((platoon) => 
-      platoon['company_id'] == selectedCompanyData['id']
-    ).toList();
+  // Get all platoons (no filtering needed since no company relationship)
+  List<Map<String, dynamic>> _getAllPlatoons() {
+    return _platoons;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading && _schools.isEmpty) {
+    if (_isLoading && _companies.isEmpty) {
       return const Scaffold(
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFF059669)),
@@ -583,22 +541,6 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ),
             ),
             const SizedBox(height: 20),
-            _buildDropdown(
-              value: _selectedSchool,
-              items: _schools.map((school) => school['name'] as String).toList(),
-              hint: "School/Institution *",
-              icon: Icons.school,
-              onChanged: (value) {
-                setState(() {
-                  _selectedSchool = value;
-                  // Reset dependent dropdowns
-                  _selectedCompany = null;
-                  _selectedPlatoon = null;
-                });
-              },
-              required: true,
-            ),
-            const SizedBox(height: 15),
             _buildTextField(_idNumberController, "ID Number *", Icons.badge, required: true),
             const SizedBox(height: 15),
             _buildDropdown(
@@ -612,22 +554,16 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedCompany,
-              items: _getFilteredCompanies().map((company) => company['name'] as String).toList(),
+              items: _companies.map((company) => company['name'] as String).toList(),
               hint: "Company *",
               icon: Icons.group,
-              onChanged: (value) {
-                setState(() {
-                  _selectedCompany = value;
-                  // Reset dependent dropdown
-                  _selectedPlatoon = null;
-                });
-              },
+              onChanged: (value) => setState(() => _selectedCompany = value),
               required: true,
             ),
             const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedPlatoon,
-              items: _getFilteredPlatoons().map((platoon) => platoon['name'] as String).toList(),
+              items: _getAllPlatoons().map((platoon) => platoon['name'] as String).toList(),
               hint: "Platoon *",
               icon: Icons.groups,
               onChanged: (value) => setState(() => _selectedPlatoon = value),
@@ -752,20 +688,28 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       }
 
       // Get IDs for foreign keys
-      final selectedSchoolData = _schools.firstWhere(
-        (school) => school['name'] == _selectedSchool
-      );
       final selectedRankData = _ranks.firstWhere(
         (rank) => rank['name'] == _selectedRank
       );
-      final selectedCompanyData = _getFilteredCompanies().firstWhere(
+      final selectedCompanyData = _companies.firstWhere(
         (company) => company['name'] == _selectedCompany
       );
-      final selectedPlatoonData = _getFilteredPlatoons().firstWhere(
+      final selectedPlatoonData = _getAllPlatoons().firstWhere(
         (platoon) => platoon['name'] == _selectedPlatoon
       );
 
-      // Update users table with profile data
+      // First, insert the address and get the ID
+      final addressResponse = await _supabase.from('addresses').insert({
+        'region': _selectedRegion,
+        'province': _selectedProvince,
+        'city': _selectedCity,
+        'barangay': _selectedBarangay,
+        'street': null, // Street field can be added later if needed
+      }).select('id').single();
+
+      final addressId = addressResponse['id'];
+
+      // Then update the user with the address_id reference
       await _supabase.from('users').update({
         'firstname': _firstNameController.text.trim(),
         'middlename': _middleNameController.text.trim().isEmpty 
@@ -775,11 +719,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         'extensionname': _selectedExtension,
         'birthdate': _selectedBirthday!.toIso8601String().split('T')[0],
         'sex': _selectedSex,
-        'region': _selectedRegion,
-        'province': _selectedProvince,
-        'city': _selectedCity,
-        'barangay': _selectedBarangay,
-        'school_id': selectedSchoolData['id'],
+        'address_id': addressId,
         'student_id': _idNumberController.text.trim(),
         'rank_id': selectedRankData['id'],
         'company_id': selectedCompanyData['id'],
