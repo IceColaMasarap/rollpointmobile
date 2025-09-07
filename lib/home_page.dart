@@ -1,8 +1,258 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'widgets/camouflage_background.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  final _supabase = Supabase.instance.client;
+  String? currentQRData;
+  bool isGeneratingQR = false;
+  Map<String, dynamic>? userInfo;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+    _loadOrGenerateQR();
+  }
+
+  Future<void> _loadUserInfo() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      final response = await _supabase
+          .from('users')
+          .select('''
+            firstname, middlename, lastname, extensionname,
+            student_id, role,
+            companies!inner(name),
+            platoons!inner(name)
+          ''')
+          .eq('id', user.id)
+          .single();
+
+      setState(() {
+        userInfo = response;
+      });
+    } catch (e) {
+      print('Error loading user info: $e');
+    }
+  }
+
+  Future<void> _loadOrGenerateQR() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      // Check if user has an active QR code
+      final response = await _supabase
+          .from('qr_images')
+          .select('qr_data')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .gt('expires_at', DateTime.now().toIso8601String())
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      if (response.isNotEmpty) {
+        setState(() {
+          currentQRData = response.first['qr_data'];
+        });
+      } else {
+        // Generate new QR code
+        await _generateNewQR();
+      }
+    } catch (e) {
+      print('Error loading QR: $e');
+      // Generate new QR if loading fails
+      await _generateNewQR();
+    }
+  }
+
+  Future<void> _generateNewQR() async {
+    if (isGeneratingQR) return;
+    
+    setState(() {
+      isGeneratingQR = true;
+    });
+
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      final now = DateTime.now();
+      final expiresAt = now.add(const Duration(hours: 24)); // QR expires in 24 hours
+
+      // Create QR data
+      final qrData = jsonEncode({
+        'user_id': user.id,
+        'generated_at': now.toIso8601String(),
+        'expires_at': expiresAt.toIso8601String(),
+        'type': 'attendance',
+        'version': '1.0'
+      });
+
+      // Create hash for the QR data
+      final bytes = utf8.encode(qrData);
+      final hash = sha256.convert(bytes).toString();
+
+      // Deactivate old QR codes for this user
+      await _supabase
+          .from('qr_images')
+          .update({'is_active': false})
+          .eq('user_id', user.id);
+
+      // Insert new QR code
+      await _supabase.from('qr_images').insert({
+        'user_id': user.id,
+        'qr_data': qrData,
+        'qr_hash': hash,
+        'expires_at': expiresAt.toIso8601String(),
+        'is_active': true,
+      });
+
+      setState(() {
+        currentQRData = qrData;
+        isGeneratingQR = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('New QR code generated successfully!'),
+            backgroundColor: Color(0xFF059669),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        isGeneratingQR = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating QR code: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildQRCodeSection() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            // QR Code
+            Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: const Color(0xFF059669),
+                  width: 4,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: currentQRData != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: QrImageView(
+                        data: currentQRData!,
+                        version: QrVersions.auto,
+                        size: 192,
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        errorCorrectionLevel: QrErrorCorrectLevel.M,
+                      ),
+                    )
+                  : Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF059669),
+                        ),
+                      ),
+                    ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // QR Info
+            if (currentQRData != null)
+              Text(
+                'Valid for 24 hours',
+                style: TextStyle(
+                  color: Colors.grey[600],
+                  fontSize: 12,
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            // Generate New Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isGeneratingQR ? null : _generateNewQR,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: isGeneratingQR
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        currentQRData != null ? 'Generate New' : 'Generate QR Code',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,16 +273,15 @@ class HomePage extends StatelessWidget {
                   child: Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: Colors
-                          .transparent, // keep transparent so background shows
+                      color: Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
+                        children: [
+                          const Text(
                             'Greetings,',
                             style: TextStyle(
                               color: Colors.white,
@@ -41,25 +290,29 @@ class HomePage extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'Sean Derick',
-                            style: TextStyle(
+                            userInfo != null 
+                                ? '${userInfo!['firstname'] ?? ''} ${userInfo!['lastname'] ?? ''}'.trim()
+                                : 'Loading...',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Text(
-                            '2023-77144-ABCD',
-                            style: TextStyle(
+                            userInfo?['student_id'] ?? 'Loading...',
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                             ),
                           ),
                           Text(
-                            'Student - Platoon',
-                            style: TextStyle(
+                            userInfo != null
+                                ? '${userInfo!['role']} - ${userInfo!['platoons']?['name'] ?? 'No Platoon'}'
+                                : 'Loading...',
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
@@ -78,97 +331,7 @@ class HomePage extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          children: [
-                            // QR Code placeholder
-                            Container(
-                              width: 200,
-                              height: 200,
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: const Color(0xFF059669),
-                                  width: 4,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Stack(
-                                children: [
-                                  // QR Code pattern (simplified representation)
-                                  Container(
-                                    color: const Color.fromARGB(
-                                      255,
-                                      210,
-                                      210,
-                                      210,
-                                    ),
-                                  ),
-                                  // Center logo
-                                  Center(
-                                    child: Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF059669),
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: const Icon(
-                                        Icons.qr_code,
-                                        color: Colors.white,
-                                        size: 24,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Generate New Button
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  // Handle generate new QR code
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF059669),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Generate new',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    _buildQRCodeSection(),
 
                     const SizedBox(height: 30),
 
@@ -379,112 +542,4 @@ class HomePage extends StatelessWidget {
       ),
     );
   }
-}
-
-class QRCodePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black
-      ..style = PaintingStyle.fill;
-
-    // Create a simplified QR code pattern
-    final cellSize = size.width / 21; // 21x21 grid for QR code
-
-    // Draw positioning squares (corners)
-    _drawPositioningSquare(canvas, paint, 0, 0, cellSize);
-    _drawPositioningSquare(canvas, paint, 14 * cellSize, 0, cellSize);
-    _drawPositioningSquare(canvas, paint, 0, 14 * cellSize, cellSize);
-
-    // Draw some random pattern cells to simulate QR code data
-    final random = [
-      [2, 2],
-      [2, 4],
-      [2, 6],
-      [3, 2],
-      [3, 5],
-      [3, 7],
-      [4, 3],
-      [4, 6],
-      [5, 2],
-      [5, 4],
-      [5, 7],
-      [6, 3],
-      [6, 5],
-      [7, 2],
-      [7, 6],
-      [8, 4],
-      [8, 7],
-      [9, 2],
-      [9, 5],
-      [10, 3],
-      [10, 6],
-      [11, 2],
-      [11, 4],
-      [11, 7],
-      [12, 3],
-      [12, 5],
-      [13, 2],
-      [13, 6],
-      [15, 2],
-      [15, 4],
-      [15, 6],
-      [16, 3],
-      [16, 5],
-      [17, 2],
-      [17, 4],
-      [17, 7],
-      [18, 3],
-      [18, 6],
-      [2, 9],
-      [3, 10],
-      [4, 11],
-      [5, 9],
-      [6, 10],
-      [7, 11],
-      [8, 9],
-      [9, 10],
-      [10, 11],
-      [11, 9],
-    ];
-
-    for (final cell in random) {
-      final x = cell[0] * cellSize;
-      final y = cell[1] * cellSize;
-      canvas.drawRect(Rect.fromLTWH(x, y, cellSize, cellSize), paint);
-    }
-  }
-
-  void _drawPositioningSquare(
-    Canvas canvas,
-    Paint paint,
-    double x,
-    double y,
-    double cellSize,
-  ) {
-    // Outer square
-    canvas.drawRect(Rect.fromLTWH(x, y, cellSize * 7, cellSize * 7), paint);
-
-    // Inner white square
-    paint.color = Colors.white;
-    canvas.drawRect(
-      Rect.fromLTWH(x + cellSize, y + cellSize, cellSize * 5, cellSize * 5),
-      paint,
-    );
-
-    // Center black square
-    paint.color = Colors.black;
-    canvas.drawRect(
-      Rect.fromLTWH(
-        x + cellSize * 2,
-        y + cellSize * 2,
-        cellSize * 3,
-        cellSize * 3,
-      ),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

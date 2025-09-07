@@ -51,84 +51,92 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _successMessage = null;
-    });
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+    _successMessage = null;
+  });
 
-    try {
-      final response = await _supabase.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+  try {
+    final response = await _supabase.auth.signInWithPassword(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
 
-      if (response.session != null) {
+    if (response.session != null) {
+      // Fetch user info including status
+      final userResponse = await _supabase
+          .from('users')
+          .select('is_configured, role, status')
+          .eq('id', response.user!.id)
+          .single();
+
+      final String status = userResponse['status'] ?? 'active';
+
+      if (status == 'archived') {
+        // Block login if archived
         setState(() {
-          _successMessage = 'Login successful! Redirecting...';
+          _errorMessage =
+              "This account has been archived. Please contact the administrator.";
         });
 
-        // Check if user profile is configured
-final userResponse = await _supabase
-    .from('users')
-    .select('is_configured, role')
-    .eq('id', response.user!.id)
-    .single();
-
-final bool isConfigured = userResponse['is_configured'] ?? false;
-final String userRole = userResponse['role'] ?? 'Student';
-
-Future.delayed(const Duration(milliseconds: 1200), () {
-  if (!isConfigured) {
-    // User needs to complete profile setup
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
-    );
-  } else if (userRole == 'Instructor') {
-    // Redirect to instructor page
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const InstructorMainScreen()),
-    );
-  } else {
-    // Regular student user, go to main screen
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const MainScreen()),
-    );
-  }
-});
-
-      } else {
-        setState(() {
-          _errorMessage = "Login failed: No active session.";
-        });
+        // Force sign out so no session stays active
+        await _supabase.auth.signOut();
+        return;
       }
-    } on AuthException catch (authError) {
+
+      final bool isConfigured = userResponse['is_configured'] ?? false;
+      final String userRole = userResponse['role'] ?? 'Student';
+
       setState(() {
-        _errorMessage = "Login failed: ${authError.message}";
+        _successMessage = 'Login successful! Redirecting...';
       });
-    } catch (error) {
-      setState(() {
-        _errorMessage = "Unexpected error: $error";
+
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (!isConfigured) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
+          );
+        } else if (userRole == 'Instructor') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const InstructorMainScreen()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainScreen()),
+          );
+        }
       });
-    } finally {
+    } else {
       setState(() {
-        _isLoading = false;
+        _errorMessage = "Login failed: No active session.";
       });
     }
+  } on AuthException catch (authError) {
+    setState(() {
+      _errorMessage = "Login failed: ${authError.message}";
+    });
+  } catch (error) {
+    setState(() {
+      _errorMessage = "Unexpected error: $error";
+    });
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white
-        ),
+        decoration: const BoxDecoration(color: Colors.white),
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {

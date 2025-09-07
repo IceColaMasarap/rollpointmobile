@@ -95,14 +95,14 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   String? _selectedSchool;
   final _idNumberController = TextEditingController();
-  String? _selectedRank;
+  // String? _selectedRank;
   String? _selectedCompany;
   String? _selectedPlatoon;
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
   List<Map<String, dynamic>> _schools = [];
-  List<Map<String, dynamic>> _ranks = [];
+  // List<Map<String, dynamic>> _ranks = [];
   List<Map<String, dynamic>> _companies = [];
   List<Map<String, dynamic>> _platoons = [];
 
@@ -115,6 +115,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     super.initState();
     _loadDataFromDatabase();
     _fetchRegions();
+    
   }
 
   Future<void> _loadDataFromDatabase() async {
@@ -126,10 +127,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           .select('id, name')
           .order('name');
 
-      final ranksResponse = await _supabase
-          .from('ranks')
-          .select('id, name')
-          .order('name');
+      // final ranksResponse = await _supabase
+      //     .from('ranks')
+      //     .select('id, name')
+      //     .order('name');
 
       final companiesResponse = await _supabase
           .from('companies')
@@ -143,7 +144,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
       setState(() {
         _schools = List<Map<String, dynamic>>.from(schoolsResponse);
-        _ranks = List<Map<String, dynamic>>.from(ranksResponse);
+        // _ranks = List<Map<String, dynamic>>.from(ranksResponse);
         _companies = List<Map<String, dynamic>>.from(companiesResponse);
         _platoons = List<Map<String, dynamic>>.from(platoonsResponse);
       });
@@ -376,10 +377,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           _showErrorSnackBar('ID Number is required');
           return false;
         }
-        if (_selectedRank == null) {
-          _showErrorSnackBar('Rank is required');
-          return false;
-        }
+        // if (_selectedRank == null) {
+        //   _showErrorSnackBar('Rank is required');
+        //   return false;
+        // }
         if (_selectedCompany == null) {
           _showErrorSnackBar('Company is required');
           return false;
@@ -404,37 +405,15 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     );
   }
 
-  // Get filtered companies based on selected school
   List<Map<String, dynamic>> _getFilteredCompanies() {
-    if (_selectedSchool == null) return [];
+  return _companies;
+}
 
-    final selectedSchoolData = _schools.firstWhere(
-      (school) => school['name'] == _selectedSchool,
-      orElse: () => <String, dynamic>{},
-    );
+// Get all platoons (not filtered by company)
+List<Map<String, dynamic>> _getFilteredPlatoons() {
+  return _platoons;
+}
 
-    if (selectedSchoolData.isEmpty) return _companies;
-
-    return _companies
-        .where((company) => company['school_id'] == selectedSchoolData['id'])
-        .toList();
-  }
-
-  // Get filtered platoons based on selected company
-  List<Map<String, dynamic>> _getFilteredPlatoons() {
-    if (_selectedCompany == null) return [];
-
-    final selectedCompanyData = _getFilteredCompanies().firstWhere(
-      (company) => company['name'] == _selectedCompany,
-      orElse: () => <String, dynamic>{},
-    );
-
-    if (selectedCompanyData.isEmpty) return _platoons;
-
-    return _platoons
-        .where((platoon) => platoon['company_id'] == selectedCompanyData['id'])
-        .toList();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -944,15 +923,15 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               required: true,
             ),
             const SizedBox(height: 15),
-            _buildDropdown(
-              value: _selectedRank,
-              items: _ranks.map((rank) => rank['name'] as String).toList(),
-              hint: "Rank *",
-              icon: Icons.military_tech,
-              onChanged: (value) => setState(() => _selectedRank = value),
-              required: true,
-            ),
-            const SizedBox(height: 15),
+            // _buildDropdown(
+            //   value: _selectedRank,
+            //   items: _ranks.map((rank) => rank['name'] as String).toList(),
+            //   hint: "Rank *",
+            //   icon: Icons.military_tech,
+            //   onChanged: (value) => setState(() => _selectedRank = value),
+            //   required: true,
+            // ),
+            // const SizedBox(height: 15),
             _buildDropdown(
               value: _selectedCompany,
               items: _getFilteredCompanies()
@@ -1160,7 +1139,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 _buildConfirmationSection('Military/Academic Details', [
                   'School: $_selectedSchool',
                   'ID Number: ${_idNumberController.text.trim()}',
-                  'Rank: $_selectedRank',
+                  // 'Rank: $_selectedRank',
                   'Company: $_selectedCompany',
                   'Platoon: $_selectedPlatoon',
                 ]),
@@ -1232,9 +1211,9 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       final selectedSchoolData = _schools.firstWhere(
         (school) => school['name'] == _selectedSchool,
       );
-      final selectedRankData = _ranks.firstWhere(
-        (rank) => rank['name'] == _selectedRank,
-      );
+      // final selectedRankData = _ranks.firstWhere(
+      //   (rank) => rank['name'] == _selectedRank,
+      // );
       final selectedCompanyData = _getFilteredCompanies().firstWhere(
         (company) => company['name'] == _selectedCompany,
       );
@@ -1243,30 +1222,40 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       );
 
       // Update users table with profile data (saving address names)
-      await _supabase
-          .from('users')
-          .update({
-            'firstname': _firstNameController.text.trim(),
-            'middlename': _middleNameController.text.trim().isEmpty
-                ? null
-                : _middleNameController.text.trim(),
-            'lastname': _lastNameController.text.trim(),
-            'extensionname': _selectedExtension,
-            'birthdate': _selectedBirthday!.toIso8601String().split('T')[0],
-            'sex': _selectedSex,
-            'region': _selectedRegionName,
-            'province': _selectedProvinceName, // may be null for NCR, etc.
-            'city': _selectedCityName,
-            'barangay': _selectedBarangayName,
-            'school_id': selectedSchoolData['id'],
-            'student_id': _idNumberController.text.trim(),
-            'rank_id': selectedRankData['id'],
-            'company_id': selectedCompanyData['id'],
-            'platoon_id': selectedPlatoonData['id'],
-            'is_configured': true,
-          })
-          .eq('id', user.id);
+   // First, insert the address and use the user's ID as the address ID
+await _supabase
+    .from('addresses')
+    .upsert({
+      'id': user.id, // Use user ID as address ID
+      'region': _selectedRegionName,
+      'province': _selectedProvinceName, // may be null for NCR, etc.
+      'city': _selectedCityName,
+      'barangay': _selectedBarangayName,
+      // Add street if you have that field in your form
+      // 'street': _streetController.text.trim().isEmpty ? null : _streetController.text.trim(),
+    });
 
+// Then update the user with the address reference
+await _supabase
+    .from('users')
+    .update({
+      'firstname': _firstNameController.text.trim(),
+      'middlename': _middleNameController.text.trim().isEmpty
+          ? null
+          : _middleNameController.text.trim(),
+      'lastname': _lastNameController.text.trim(),
+      'extensionname': _selectedExtension,
+      'birthdate': _selectedBirthday!.toIso8601String().split('T')[0],
+      'sex': _selectedSex,
+      'school_id': selectedSchoolData['id'],
+      'student_id': _idNumberController.text.trim(),
+      // 'rank_id': selectedRankData['id'],
+      'company_id': selectedCompanyData['id'],
+      'platoon_id': selectedPlatoonData['id'],
+      'address_id': user.id, // Reference the address using user ID
+      'is_configured': true,
+    })
+    .eq('id', user.id);
       if (mounted) {
         Navigator.pushReplacement(
           context,
