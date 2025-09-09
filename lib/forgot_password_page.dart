@@ -126,7 +126,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
           _errorMessage = 'Verification failed. Please try again.';
         });
       }
-    } on AuthException catch (authError) {
+    } on AuthException {
       setState(() {
         _errorMessage = 'Invalid or expired code. Please try again.';
       });

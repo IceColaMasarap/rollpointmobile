@@ -1,14 +1,198 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/camouflage_background.dart';
 // Import the new pages
 import 'view_platoons_page.dart';
 import 'attendance_log_page.dart';
 
-class InstructorPage extends StatelessWidget {
+class InstructorPage extends StatefulWidget {
   const InstructorPage({super.key});
 
   @override
+  State<InstructorPage> createState() => _InstructorPageState();
+}
+
+class _InstructorPageState extends State<InstructorPage> {
+  final _supabase = Supabase.instance.client;
+  
+  // User data
+  Map<String, dynamic>? currentUser;
+  List<Map<String, dynamic>> userAssignments = [];
+  
+  // Selected assignment data
+  Map<String, dynamic>? selectedAssignment;
+  Map<String, dynamic> attendanceStats = {
+    'totalStudents': 0,
+    'presentToday': 0,
+    'absentToday': 0,
+    'attendanceRate': 0.0,
+  };
+  
+  // Recent activity data
+  List<Map<String, dynamic>> recentActivity = [];
+  
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      // Get current user info
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Fetch user details
+      final userResponse = await _supabase
+          .from('users')
+          .select('firstname, lastname, student_id, rank_id, ranks(name)')
+          .eq('id', userId)
+          .single();
+
+      // Fetch user's assignments with company and platoon info
+      final assignmentsResponse = await _supabase
+          .from('instructor_assignments')
+          .select('''
+            id, company_id, platoon_id,
+            companies(id, name),
+            platoons(id, name)
+          ''')
+          .eq('instructor_id', userId);
+
+      setState(() {
+        currentUser = userResponse;
+        userAssignments = List<Map<String, dynamic>>.from(assignmentsResponse);
+        
+        // Set first assignment as default if available
+        if (userAssignments.isNotEmpty) {
+          selectedAssignment = userAssignments.first;
+        }
+      });
+
+      // Load attendance data for selected assignment
+      if (selectedAssignment != null) {
+        await _loadAttendanceData();
+      }
+
+    } catch (e) {
+      print('Error loading user data: $e');
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadAttendanceData() async {
+    if (selectedAssignment == null) return;
+
+    try {
+      final companyId = selectedAssignment!['company_id'];
+      final platoonId = selectedAssignment!['platoon_id'];
+
+      // Get total students in this company-platoon
+      final studentsResponse = await _supabase
+          .from('users')
+          .select('id')
+          .eq('role', 'Student')
+          .eq('company_id', companyId)
+          .eq('platoon_id', platoonId)
+          .neq('status', 'archived');
+
+      final totalStudents = studentsResponse.length;
+
+      // Get today's attendance for these students
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+
+      // First, get all student IDs for this company-platoon
+      final studentIds = studentsResponse.map((student) => student['id']).toList();
+
+      // Then get today's attendance for these specific students
+      final attendanceResponse = await _supabase
+          .from('attendance')
+          .select('user_id, status')
+          .inFilter('user_id', studentIds)
+          .gte('created_at', startOfDay.toIso8601String())
+          .lt('created_at', endOfDay.toIso8601String());
+
+      final presentToday = attendanceResponse.where((record) => 
+          record['status'] == 'present').length;
+      final absentToday = totalStudents - presentToday;
+      final attendanceRate = totalStudents > 0 
+          ? (presentToday / totalStudents * 100) 
+          : 0.0;
+
+      // Get recent activity for this company-platoon
+      final recentActivityResponse = await _supabase
+          .from('attendance')
+          .select('''
+            status, created_at, user_id,
+            users!attendance_user_id_fkey(firstname, lastname, student_id)
+          ''')
+          .inFilter('user_id', studentIds)
+          .order('created_at', ascending: false)
+          .limit(10);
+
+      setState(() {
+        attendanceStats = {
+          'totalStudents': totalStudents,
+          'presentToday': presentToday,
+          'absentToday': absentToday,
+          'attendanceRate': attendanceRate,
+        };
+        recentActivity = List<Map<String, dynamic>>.from(recentActivityResponse);
+      });
+
+    } catch (e) {
+      print('Error loading attendance data: $e');
+    }
+  }
+
+  void _onAssignmentSelected(Map<String, dynamic> assignment) {
+    setState(() {
+      selectedAssignment = assignment;
+    });
+    _loadAttendanceData();
+  }
+
+  String _getTimeAgo(String createdAt) {
+    final created = DateTime.parse(createdAt);
+    final now = DateTime.now();
+    final difference = now.difference(created);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} minutes ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hours ago';
+    } else {
+      return '${difference.inDays} days ago';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF8FAFC),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFF059669),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: SafeArea(
@@ -34,8 +218,8 @@ class InstructorPage extends StatelessWidget {
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
+                        children: [
+                          const Text(
                             'Welcome,',
                             style: TextStyle(
                               color: Colors.white,
@@ -44,25 +228,25 @@ class InstructorPage extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'Instructor Panel',
-                            style: TextStyle(
+                            currentUser?['firstname'] ?? 'Instructor',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(height: 8),
+                          const SizedBox(height: 8),
                           Text(
-                            'Staff ID: INS-2024-001',
-                            style: TextStyle(
+                            'Staff ID: ${currentUser?['student_id'] ?? 'N/A'}',
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                             ),
                           ),
                           Text(
-                            'Military Academy - Command',
-                            style: TextStyle(
+                            currentUser?['ranks']?['name'] ?? 'Military Academy',
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
@@ -82,7 +266,7 @@ class InstructorPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Today's Overview Card
+                    // Assignment Selection Card
                     Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
@@ -102,175 +286,315 @@ class InstructorPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              "Today's Overview",
+                              "Select Assignment",
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF374151),
                               ),
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
                             
-                            // Stats Row
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildStatCard(
-                                    title: 'Total Students',
-                                    value: '156',
-                                    icon: Icons.people,
-                                    color: const Color(0xFF3B82F6),
-                                  ),
+                            if (userAssignments.isEmpty)
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFF59E0B)),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildStatCard(
-                                    title: 'Present Today',
-                                    value: '142',
-                                    icon: Icons.check_circle,
-                                    color: const Color(0xFF059669),
-                                  ),
+                                child: const Row(
+                                  children: [
+                                    Icon(
+                                      Icons.warning,
+                                      color: Color(0xFFF59E0B),
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'No assignments found. Contact administrator.',
+                                      style: TextStyle(
+                                        color: Color(0xFFF59E0B),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            
-                            const SizedBox(height: 12),
-                            
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _buildStatCard(
-                                    title: 'Absent',
-                                    value: '14',
-                                    icon: Icons.cancel,
-                                    color: const Color(0xFFEF4444),
+                              )
+                            else
+                              DropdownButtonFormField<Map<String, dynamic>>(
+                                value: selectedAssignment,
+                                decoration: InputDecoration(
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
                                   ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _buildStatCard(
-                                    title: 'Attendance Rate',
-                                    value: '91%',
-                                    icon: Icons.trending_up,
-                                    color: const Color(0xFFF59E0B),
-                                  ),
-                                ),
-                              ],
-                            ),
+                                items: userAssignments.map((assignment) {
+                                  return DropdownMenuItem<Map<String, dynamic>>(
+                                    value: assignment,
+                                    child: Text(
+                                      '${assignment['companies']['name']} - ${assignment['platoons']['name']}',
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    _onAssignmentSelected(value);
+                                  }
+                                },
+                              ),
                           ],
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    if (selectedAssignment != null) ...[
+                      const SizedBox(height: 24),
 
-                    // Quick Actions Section
-                    const Text(
-                      'Quick Actions',
-                      style: TextStyle(
-                        color: Color(0xFF374151),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 16),
-                    
-                    // Action Buttons - Two Column Layout
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildActionCard(
-                            context: context,
-                            title: 'View Platoons',
-                            subtitle: 'Manage student groups',
-                            icon: Icons.group,
-                            color: const Color(0xFF059669),
-                            isExpanded: true,
-                          ),
+                      // Today's Overview Card
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildActionCard(
-                            context: context,
-                            title: 'Attendance Log',
-                            subtitle: 'View & export records',
-                            icon: Icons.assignment,
-                            color: const Color(0xFF3B82F6),
-                            isExpanded: true,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    // Recent Activity Section
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Recent Activity',
-                          style: TextStyle(
-                            color: Color(0xFF374151),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            // Navigate to Attendance Log
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const AttendanceLogPage(),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    "Today's Overview",
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF374151),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF059669).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      '${selectedAssignment!['companies']['name']} - ${selectedAssignment!['platoons']['name']}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF059669),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            );
-                          },
-                          child: const Text(
-                            'View All',
+                              const SizedBox(height: 20),
+                              
+                              // Stats Row
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      title: 'Total Students',
+                                      value: '${attendanceStats['totalStudents']}',
+                                      icon: Icons.people,
+                                      color: const Color(0xFF3B82F6),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      title: 'Present Today',
+                                      value: '${attendanceStats['presentToday']}',
+                                      icon: Icons.check_circle,
+                                      color: const Color(0xFF059669),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              const SizedBox(height: 12),
+                              
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      title: 'Absent',
+                                      value: '${attendanceStats['absentToday']}',
+                                      icon: Icons.cancel,
+                                      color: const Color(0xFFEF4444),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      title: 'Attendance Rate',
+                                      value: '${attendanceStats['attendanceRate'].toStringAsFixed(0)}%',
+                                      icon: Icons.trending_up,
+                                      color: const Color(0xFFF59E0B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Quick Actions Section
+                      const Text(
+                        'Quick Actions',
+                        style: TextStyle(
+                          color: Color(0xFF374151),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      // Action Buttons - Two Column Layout
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildActionCard(
+                              context: context,
+                              title: 'View Platoons',
+                              subtitle: 'Manage student groups',
+                              icon: Icons.group,
+                              color: const Color(0xFF059669),
+                              isExpanded: true,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildActionCard(
+                              context: context,
+                              title: 'Attendance Log',
+                              subtitle: 'View & export records',
+                              icon: Icons.assignment,
+                              color: const Color(0xFF3B82F6),
+                              isExpanded: true,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      // Recent Activity Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Recent Activity',
                             style: TextStyle(
-                              color: Color(0xFF059669),
-                              fontSize: 14,
+                              color: Color(0xFF374151),
+                              fontSize: 18,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => AttendanceLogPage(
+                                    companyId: selectedAssignment!['company_id'],
+                                    companyName: selectedAssignment!['companies']['name'],
+                                    platoonId: selectedAssignment!['platoon_id'],
+                                    platoonName: selectedAssignment!['platoons']['name'],
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              'View All',
+                              style: TextStyle(
+                                color: Color(0xFF059669),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Recent Activity Items
+                      if (recentActivity.isNotEmpty)
+                        ...recentActivity.take(3).map((activity) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildActivityItem(
+                            studentName: '${activity['users']['firstname']} ${activity['users']['lastname']}',
+                            studentId: activity['users']['student_id'] ?? 'N/A',
+                            action: activity['status'] == 'present' ? 'Present' : 'Absent',
+                            time: _getTimeAgo(activity['created_at']),
+                            status: activity['status'],
+                          ),
+                        ))
+                      else
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(32),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 5,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.history,
+                                color: Colors.grey[400],
+                                size: 48,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No recent activity',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Attendance records will appear here',
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 16),
-
-                    // Recent Activity Items - Updated to not show "Checked in"
-                    _buildActivityItem(
-                      studentName: 'Sean Derick',
-                      studentId: '2023-77144-ABCD',
-                      action: 'Present',
-                      time: '2 minutes ago',
-                      status: 'present',
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    _buildActivityItem(
-                      studentName: 'Maria Santos',
-                      studentId: '2023-77145-EFGH',
-                      action: 'Present',
-                      time: '5 minutes ago',
-                      status: 'present',
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    _buildActivityItem(
-                      studentName: 'John Cruz',
-                      studentId: '2023-77146-IJKL',
-                      action: 'Absent',
-                      time: '15 minutes ago',
-                      status: 'absent',
-                    ),
-
-                    const SizedBox(height: 40),
+                      const SizedBox(height: 40),
+                    ],
                   ],
                 ),
               ),
@@ -355,7 +679,6 @@ class InstructorPage extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () {
-            // Handle action tap
             if (title == 'View Platoons') {
               Navigator.push(
                 context,
@@ -367,7 +690,12 @@ class InstructorPage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const AttendanceLogPage(),
+                  builder: (context) => AttendanceLogPage(
+                    companyId: selectedAssignment!['company_id'],
+                    companyName: selectedAssignment!['companies']['name'],
+                    platoonId: selectedAssignment!['platoon_id'],
+                    platoonName: selectedAssignment!['platoons']['name'],
+                  ),
                 ),
               );
             }

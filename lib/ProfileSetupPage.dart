@@ -119,43 +119,39 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   }
 
   Future<void> _loadDataFromDatabase() async {
-    try {
-      setState(() => _isLoading = true);
+  try {
+    setState(() => _isLoading = true);
 
-      final schoolsResponse = await _supabase
-          .from('schools')
-          .select('id, name')
-          .order('name');
+    final schoolsResponse = await _supabase
+        .from('schools')
+        .select('id, name')
+        .order('name');
 
-      // final ranksResponse = await _supabase
-      //     .from('ranks')
-      //     .select('id, name')
-      //     .order('name');
+    final companiesResponse = await _supabase
+        .from('companies')
+        .select('id, name')
+        .order('name');
 
-      final companiesResponse = await _supabase
-          .from('companies')
-          .select('id, name')
-          .order('name');
+    // Modified to include company_id
+    final platoonsResponse = await _supabase
+        .from('platoons')
+        .select('id, name, company_id')
+        .order('name');
 
-      final platoonsResponse = await _supabase
-          .from('platoons')
-          .select('id, name')
-          .order('name');
-
-      setState(() {
-        _schools = List<Map<String, dynamic>>.from(schoolsResponse);
-        // _ranks = List<Map<String, dynamic>>.from(ranksResponse);
-        _companies = List<Map<String, dynamic>>.from(companiesResponse);
-        _platoons = List<Map<String, dynamic>>.from(platoonsResponse);
-      });
-    } catch (error) {
-      setState(() {
-        _errorMessage = 'Failed to load data: $error';
-      });
-    } finally {
-      setState(() => _isLoading = false);
-    }
+    setState(() {
+      _schools = List<Map<String, dynamic>>.from(schoolsResponse);
+      _companies = List<Map<String, dynamic>>.from(companiesResponse);
+      _platoons = List<Map<String, dynamic>>.from(platoonsResponse);
+    });
+  } catch (error) {
+    setState(() {
+      _errorMessage = 'Failed to load data: $error';
+    });
+  } finally {
+    setState(() => _isLoading = false);
   }
+}
+
 
   // ---------------- PSGC FETCHERS ----------------
 
@@ -409,11 +405,17 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   return _companies;
 }
 
-// Get all platoons (not filtered by company)
 List<Map<String, dynamic>> _getFilteredPlatoons() {
-  return _platoons;
+  if (_selectedCompany == null) return [];
+  
+  final selectedCompanyData = _companies.firstWhere(
+    (company) => company['name'] == _selectedCompany,
+  );
+  
+  return _platoons.where((platoon) => 
+    platoon['company_id'] == selectedCompanyData['id']
+  ).toList();
 }
-
 
   @override
   Widget build(BuildContext context) {
@@ -933,31 +935,37 @@ List<Map<String, dynamic>> _getFilteredPlatoons() {
             // ),
             // const SizedBox(height: 15),
             _buildDropdown(
-              value: _selectedCompany,
-              items: _getFilteredCompanies()
-                  .map((company) => company['name'] as String)
-                  .toList(),
-              hint: "Company *",
-              icon: Icons.group,
-              onChanged: (value) {
-                setState(() {
-                  _selectedCompany = value;
-                  _selectedPlatoon = null;
-                });
-              },
-              required: true,
-            ),
+  value: _selectedCompany,
+  items: _getFilteredCompanies()
+      .map((company) => company['name'] as String)
+      .toList(),
+  hint: "Company *",
+  icon: Icons.group,
+  onChanged: (value) {
+    setState(() {
+      _selectedCompany = value;
+      _selectedPlatoon = null; // Reset platoon when company changes
+    });
+  },
+  required: true,
+),
+
             const SizedBox(height: 15),
             _buildDropdown(
-              value: _selectedPlatoon,
-              items: _getFilteredPlatoons()
-                  .map((platoon) => platoon['name'] as String)
-                  .toList(),
-              hint: "Platoon *",
-              icon: Icons.groups,
-              onChanged: (value) => setState(() => _selectedPlatoon = value),
-              required: true,
-            ),
+  value: _selectedPlatoon,
+  items: _getFilteredPlatoons()
+      .map((platoon) => platoon['name'] as String)
+      .toList(),
+  hint: _selectedCompany == null 
+      ? "Select a company first" 
+      : "Platoon *",
+  icon: Icons.groups,
+  onChanged: _selectedCompany == null 
+      ? null 
+      : (value) => setState(() => _selectedPlatoon = value),
+  required: true,
+  enabled: _selectedCompany != null,
+),
           ],
         ),
       ),
@@ -1007,7 +1015,7 @@ List<Map<String, dynamic>> _getFilteredPlatoons() {
   }) {
     final showSpinner = isLoading;
     return DropdownButtonFormField<String>(
-      value: items.contains(value) ? value : null,
+      initialValue: items.contains(value) ? value : null,
       isExpanded: true,
       decoration: InputDecoration(
         labelText: hint,
