@@ -18,6 +18,9 @@ class _ViewPlatoonsPageState extends State<ViewPlatoonsPage> {
   };
   bool isLoading = true;
   String searchQuery = '';
+String _sortBy = 'name'; // 'name', 'attendance', 'student_count'
+  String _attendanceFilter = 'all'; // 'all', 'high', 'medium', 'low'
+  String _studentCountFilter = 'all'; // 'all', 'large', 'medium', 'small'
 
   @override
   void initState() {
@@ -116,15 +119,248 @@ final totalActiveStudents = uniquePlatoons.fold<int>(
   }
 
   List<Map<String, dynamic>> get filteredPlatoons {
-    if (searchQuery.isEmpty) return platoons;
-    
-    return platoons.where((platoon) {
-      final platoonName = platoon['platoon_name']?.toString().toLowerCase() ?? '';
-      final companyName = platoon['company_name']?.toString().toLowerCase() ?? '';
-      return platoonName.contains(searchQuery.toLowerCase()) || 
-             companyName.contains(searchQuery.toLowerCase());
+    List<Map<String, dynamic>> filtered = platoons.where((platoon) {
+      // Search filter
+      if (searchQuery.isNotEmpty) {
+        final platoonName = platoon['platoon_name']?.toString().toLowerCase() ?? '';
+        final companyName = platoon['company_name']?.toString().toLowerCase() ?? '';
+        if (!platoonName.contains(searchQuery.toLowerCase()) && 
+            !companyName.contains(searchQuery.toLowerCase())) {
+          return false;
+        }
+      }
+      
+      // Attendance rate filter
+      if (_attendanceFilter != 'all') {
+        final studentCount = platoon['student_count'] ?? 0;
+        final presentCount = platoon['present_count'] ?? 0;
+        final attendanceRate = studentCount > 0 ? (presentCount / studentCount) : 0;
+        
+        switch (_attendanceFilter) {
+          case 'high':
+            if (attendanceRate < 0.8) return false;
+            break;
+          case 'medium':
+            if (attendanceRate < 0.5 || attendanceRate >= 0.8) return false;
+            break;
+          case 'low':
+            if (attendanceRate >= 0.5) return false;
+            break;
+        }
+      }
+      
+      // Student count filter
+      if (_studentCountFilter != 'all') {
+        final studentCount = platoon['student_count'] ?? 0;
+        
+        switch (_studentCountFilter) {
+          case 'large':
+            if (studentCount < 30) return false;
+            break;
+          case 'medium':
+            if (studentCount < 15 || studentCount >= 30) return false;
+            break;
+          case 'small':
+            if (studentCount >= 15) return false;
+            break;
+        }
+      }
+      
+      return true;
     }).toList();
+    
+    // Apply sorting
+    filtered.sort((a, b) {
+      switch (_sortBy) {
+        case 'attendance':
+          final aRate = (a['student_count'] ?? 0) > 0 
+              ? ((a['present_count'] ?? 0) / (a['student_count'] ?? 0)) 
+              : 0;
+          final bRate = (b['student_count'] ?? 0) > 0 
+              ? ((b['present_count'] ?? 0) / (b['student_count'] ?? 0)) 
+              : 0;
+          return bRate.compareTo(aRate); // High to low
+        case 'student_count':
+          return (b['student_count'] ?? 0).compareTo(a['student_count'] ?? 0); // High to low
+        case 'name':
+        default:
+          return (a['platoon_name'] ?? '').toString().compareTo((b['platoon_name'] ?? '').toString());
+      }
+    });
+    
+    return filtered;
   }
+void _showFilterDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text(
+                'Filter & Sort Options',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF374151),
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Sort by section
+                    const Text(
+                      'Sort by:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _sortBy,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'name', child: Text('Platoon Name')),
+                        DropdownMenuItem(value: 'attendance', child: Text('Attendance Rate')),
+                        DropdownMenuItem(value: 'student_count', child: Text('Student Count')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            _sortBy = value;
+                          });
+                        }
+                      },
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Attendance filter section
+                    const Text(
+                      'Attendance Rate:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _attendanceFilter,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('All')),
+                        DropdownMenuItem(value: 'high', child: Text('High (80%+)')),
+                        DropdownMenuItem(value: 'medium', child: Text('Medium (50-79%)')),
+                        DropdownMenuItem(value: 'low', child: Text('Low (<50%)')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            _attendanceFilter = value;
+                          });
+                        }
+                      },
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Student count filter section
+                    const Text(
+                      'Student Count:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _studentCountFilter,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'all', child: Text('All')),
+                        DropdownMenuItem(value: 'large', child: Text('Large (30+)')),
+                        DropdownMenuItem(value: 'medium', child: Text('Medium (15-29)')),
+                        DropdownMenuItem(value: 'small', child: Text('Small (<15)')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            _studentCountFilter = value;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setDialogState(() {
+                      _sortBy = 'name';
+                      _attendanceFilter = 'all';
+                      _studentCountFilter = 'all';
+                    });
+                  },
+                  child: const Text(
+                    'Reset',
+                    style: TextStyle(color: Color(0xFF6B7280)),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Color(0xFF6B7280)),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      // Filters are already updated in setDialogState
+                    });
+                    Navigator.of(context).pop();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
 
   void _navigateToAttendanceLog(Map<String, dynamic> platoonData) {
     // Navigate to attendance log with the selected platoon data
@@ -218,9 +454,7 @@ final totalActiveStudents = uniquePlatoons.fold<int>(
                       ],
                     ),
                     child: IconButton(
-                      onPressed: () {
-                        // Handle filter
-                      },
+                      onPressed: _showFilterDialog,
                       icon: const Icon(Icons.tune, color: Color(0xFF6B7280)),
                     ),
                   ),
@@ -235,7 +469,7 @@ final totalActiveStudents = uniquePlatoons.fold<int>(
                   Expanded(
                     child: _buildStatCard(
                       title: 'Total Platoons',
-                      value: stats['totalPlatoons'].toString(),
+                      value: filteredPlatoons.length.toString(), // MODIFIED: Show filtered count
                       icon: Icons.group,
                       color: const Color(0xFF3B82F6),
                     ),
@@ -244,13 +478,14 @@ final totalActiveStudents = uniquePlatoons.fold<int>(
                   Expanded(
                     child: _buildStatCard(
                       title: 'Active Students',
-                      value: stats['activeStudents'].toString(),
+                      value: filteredPlatoons.fold<int>(0, (sum, platoon) => sum + ((platoon['student_count'] ?? 0) as int)).toString(), // MODIFIED: Show filtered student count
                       icon: Icons.people,
                       color: const Color(0xFF059669),
                     ),
                   ),
                 ],
               ),
+
 
               const SizedBox(height: 24),
 
@@ -291,6 +526,7 @@ final totalActiveStudents = uniquePlatoons.fold<int>(
                     );
                   },
                 ),
+
             ],
           ),
         ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'attendance_analytics_page.dart';
 
 class AttendanceLogPage extends StatefulWidget {
   final int? companyId;
@@ -413,23 +414,36 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF059669),
-        foregroundColor: Colors.white,
-        title: const Text(
-          'Attendance Log',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
+  backgroundColor: const Color(0xFF059669),
+  foregroundColor: Colors.white,
+  title: const Text(
+    'Attendance Log',
+    style: TextStyle(
+      fontWeight: FontWeight.w600,
+    ),
+  ),
+  elevation: 0,
+  actions: [
+    IconButton(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AttendanceAnalyticsPage(
+              companyId: selectedCompanyId,
+              companyName: selectedCompanyName,
+              platoonId: selectedPlatoonId,
+              platoonName: selectedPlatoonName,
+            ),
           ),
-        ),
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _showGenerateReportDialog,
-            icon: const Icon(Icons.file_download),
-            tooltip: 'Generate Report',
-          ),
-        ],
-      ),
+        );
+      },
+      icon: const Icon(Icons.analytics),
+      tooltip: 'View Analytics',
+    ),
+  ],
+),
+
       body: SafeArea(
         child: isLoading
             ? const Center(
@@ -443,44 +457,7 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Selection Info Card
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            selectedCompanyName,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF374151),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            selectedPlatoonName,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF6B7280),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
+                    
 
                     // Filter Controls
                     Column(

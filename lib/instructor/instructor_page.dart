@@ -4,6 +4,8 @@ import '../widgets/camouflage_background.dart';
 // Import the new pages
 import 'view_platoons_page.dart';
 import 'attendance_log_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'attendance_analytics_page.dart';
 
 class InstructorPage extends StatefulWidget {
   const InstructorPage({super.key});
@@ -69,12 +71,10 @@ class _InstructorPageState extends State<InstructorPage> {
       setState(() {
         currentUser = userResponse;
         userAssignments = List<Map<String, dynamic>>.from(assignmentsResponse);
-        
-        // Set first assignment as default if available
-        if (userAssignments.isNotEmpty) {
-          selectedAssignment = userAssignments.first;
-        }
       });
+
+      // Load the previously selected assignment or set first as default
+      await _loadSelectedAssignment();
 
       // Load attendance data for selected assignment
       if (selectedAssignment != null) {
@@ -89,6 +89,56 @@ class _InstructorPageState extends State<InstructorPage> {
       });
     }
   }
+Future<void> _loadSelectedAssignment() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = _supabase.auth.currentUser?.id;
+      final savedAssignmentId = prefs.getString('selected_assignment_id_$userId');
+      
+      if (savedAssignmentId != null && userAssignments.isNotEmpty) {
+        // Try to find the saved assignment in current assignments
+        final savedAssignment = userAssignments.where(
+          (assignment) => assignment['id'] == savedAssignmentId
+        ).firstOrNull;
+        
+        if (savedAssignment != null) {
+          setState(() {
+            selectedAssignment = savedAssignment;
+          });
+          return;
+        }
+      }
+      
+      // If no saved assignment found or it's not valid, use first assignment
+      if (userAssignments.isNotEmpty) {
+        setState(() {
+          selectedAssignment = userAssignments.first;
+        });
+        // Save this as the selected assignment
+        await _saveSelectedAssignment(userAssignments.first['id']);
+      }
+    } catch (e) {
+      print('Error loading selected assignment: $e');
+      // Fallback to first assignment
+      if (userAssignments.isNotEmpty) {
+        setState(() {
+          selectedAssignment = userAssignments.first;
+        });
+      }
+    }
+  }
+
+  // New method to save selected assignment
+  Future<void> _saveSelectedAssignment(String assignmentId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = _supabase.auth.currentUser?.id;
+      await prefs.setString('selected_assignment_id_$userId', assignmentId);
+    } catch (e) {
+      print('Error saving selected assignment: $e');
+    }
+  }
+
 
   Future<void> _loadAttendanceData() async {
     if (selectedAssignment == null) return;
@@ -161,8 +211,14 @@ class _InstructorPageState extends State<InstructorPage> {
     setState(() {
       selectedAssignment = assignment;
     });
+    
+    // Save the selected assignment
+    _saveSelectedAssignment(assignment['id']);
+    
+    // Load attendance data for the new assignment
     _loadAttendanceData();
   }
+
 
   String _getTimeAgo(String createdAt) {
     final created = DateTime.parse(createdAt);
@@ -237,7 +293,7 @@ class _InstructorPageState extends State<InstructorPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Staff ID: ${currentUser?['student_id'] ?? 'N/A'}',
+                            'ID: ${currentUser?['student_id'] ?? 'N/A'}',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
@@ -259,7 +315,7 @@ class _InstructorPageState extends State<InstructorPage> {
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 15),
 
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -459,82 +515,64 @@ class _InstructorPageState extends State<InstructorPage> {
 
                       // Quick Actions Section
                       const Text(
-                        'Quick Actions',
-                        style: TextStyle(
-                          color: Color(0xFF374151),
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Action Buttons - Two Column Layout
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildActionCard(
-                              context: context,
-                              title: 'View Platoons',
-                              subtitle: 'Manage student groups',
-                              icon: Icons.group,
-                              color: const Color(0xFF059669),
-                              isExpanded: true,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildActionCard(
-                              context: context,
-                              title: 'Attendance Log',
-                              subtitle: 'View & export records',
-                              icon: Icons.assignment,
-                              color: const Color(0xFF3B82F6),
-                              isExpanded: true,
-                            ),
-                          ),
-                        ],
-                      ),
+  'Quick Actions',
+  style: TextStyle(
+    color: Color(0xFF374151),
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+  ),
+),
 
-                      const SizedBox(height: 30),
+const SizedBox(height: 16),
 
-                      // Recent Activity Section
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Recent Activity',
-                            style: TextStyle(
-                              color: Color(0xFF374151),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => AttendanceLogPage(
-                                    companyId: selectedAssignment!['company_id'],
-                                    companyName: selectedAssignment!['companies']['name'],
-                                    platoonId: selectedAssignment!['platoon_id'],
-                                    platoonName: selectedAssignment!['platoons']['name'],
-                                  ),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              'View All',
-                              style: TextStyle(
-                                color: Color(0xFF059669),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+// Action Buttons - Grid Layout for 3 buttons
+Column(
+  children: [
+    // First row - 2 buttons
+    Row(
+      children: [
+        Expanded(
+          child: _buildActionCard(
+            context: context,
+            title: 'View Platoons',
+            subtitle: 'Manage student groups',
+            icon: Icons.group,
+            color: const Color(0xFF059669),
+            isExpanded: true,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _buildActionCard(
+            context: context,
+            title: 'Attendance Log',
+            subtitle: 'View & export records',
+            icon: Icons.assignment,
+            color: const Color(0xFF3B82F6),
+            isExpanded: true,
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: 16),
+    // Second row - 1 centered button
+    Row(
+      children: [
+        Expanded(
+          child: _buildActionCard(
+            context: context,
+            title: 'Analytics',
+            subtitle: 'View attendance insights',
+            icon: Icons.analytics,
+            color: const Color(0xFF8B5CF6),
+            isExpanded: true,
+          ),
+        ),
+      ],
+    ),
+  ],
+),
+
 
                       const SizedBox(height: 16),
 
@@ -699,6 +737,20 @@ class _InstructorPageState extends State<InstructorPage> {
                 ),
               );
             }
+            else if (title == 'Analytics') {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => AttendanceAnalyticsPage(
+        companyId: selectedAssignment!['company_id'],
+        companyName: selectedAssignment!['companies']['name'],
+        platoonId: selectedAssignment!['platoon_id'],
+        platoonName: selectedAssignment!['platoons']['name'],
+      ),
+    ),
+  );
+}
+
           },
           child: Padding(
             padding: const EdgeInsets.all(20),
