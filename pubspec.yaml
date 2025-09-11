@@ -43,7 +43,11 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "lib/assets/logoR.png"
 
 flutter_native_splash:
-  color: "#118e69"                   # background color
-  image: lib/assets/logoR.png    # splash image (your logo)
+  color: "#118e69"
+  image: lib/assets/logoR.png
   android: true
   ios: true
+  web: false
+  android_gravity: center
+  ios_content_mode: center
+  fullscreen: false
