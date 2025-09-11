@@ -223,6 +223,7 @@ class _InstructorSettingsPageState extends State<InstructorSettingsPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: emailController,
+                    enabled: false, // 🔒 makes it read-only/disabled
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     border: OutlineInputBorder(),
@@ -361,6 +362,8 @@ class _InstructorSettingsPageState extends State<InstructorSettingsPage> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: idNumberController,
+                      enabled: false, // 🔒 makes it read-only/disabled
+
                     decoration: const InputDecoration(
                       labelText: 'ID Number',
                       border: OutlineInputBorder(),

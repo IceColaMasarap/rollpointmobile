@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
+import 'package:encrypt/encrypt.dart' as encrypt;
 
 class InstructorScannerPage extends StatefulWidget {
   const InstructorScannerPage({super.key});
@@ -15,11 +16,19 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
   MobileScannerController cameraController = MobileScannerController();
   bool isFlashOn = false;
   bool isProcessingQR = false;
-  
+  static const String encryptionKey = '12345678901234567890123456789012';
+late final encrypt.Encrypter encrypter;
   // Time selector variables
   TimeOfDay cutoffTime = const TimeOfDay(hour: 8, minute: 0); // Default 8:00 AM
   bool isTimeSettingsVisible = false;
-
+@override
+void initState() {
+  super.initState();
+  // Initialize encryption
+  final key = encrypt.Key.fromBase64(base64.encode(encryptionKey.codeUnits.take(32).toList()));
+  encrypter = encrypt.Encrypter(encrypt.AES(key));
+  // ... rest of existing initState code
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -445,97 +454,115 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
   }
 
   Future<void> _processQRCode(String? qrData) async {
-    if (qrData == null || isProcessingQR) return;
+  if (qrData == null || isProcessingQR) return;
 
-    setState(() {
-      isProcessingQR = true;
+  setState(() {
+    isProcessingQR = true;
+  });
+
+  try {
+    // Decrypt the QR data first
+    String decryptedData;
+    try {
+      final encryptedBytes = base64.decode(qrData);
+      final encryptedJson = jsonDecode(utf8.decode(encryptedBytes));
+      
+      final iv = encrypt.IV.fromBase64(encryptedJson['iv']);
+      final encrypted = encrypt.Encrypted.fromBase64(encryptedJson['data']);
+      
+      decryptedData = encrypter.decrypt(encrypted, iv: iv);
+    } catch (e) {
+      _showErrorSnackBar('Invalid QR code format - please use official QR codes only');
+      return;
+    }
+    
+    // Parse the decrypted QR data
+    final Map<String, dynamic> qrInfo = jsonDecode(decryptedData);
+    
+    // Validate QR structure
+    if (!_isValidQRStructure(qrInfo)) {
+      _showErrorSnackBar('Invalid QR code format');
+      return;
+    }
+
+    // Check if QR code is expired
+    final expiresAt = DateTime.parse(qrInfo['expires_at']);
+    if (DateTime.now().isAfter(expiresAt)) {
+      _showErrorSnackBar('QR code has expired');
+      return;
+    }
+
+    // Verify QR code exists in database and is active
+    final qrResponse = await _supabase
+        .from('qr_images')
+        .select('user_id, is_active')
+        .eq('user_id', qrInfo['user_id'])  // Use user_id from decrypted data
+        .eq('is_active', true)
+        .gt('expires_at', DateTime.now().toIso8601String())
+        .order('created_at', ascending: false)
+        .limit(1);
+
+    if (qrResponse.isEmpty) {
+      _showErrorSnackBar('QR code not found or inactive');
+      return;
+    }
+
+    final userId = qrResponse.first['user_id'];
+
+    // Rest of the method remains the same...
+    // Get user information
+    final userResponse = await _supabase
+        .from('users')
+        .select('''
+          firstname, middlename, lastname, extensionname,
+          student_id, role,
+          companies!inner(name),
+          platoons!inner(name)
+        ''')
+        .eq('id', userId)
+        .single();
+
+    // Check if user already has attendance today
+    final today = DateTime.now();
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    final existingAttendance = await _supabase
+        .from('attendance')
+        .select('id, status')
+        .eq('user_id', userId)
+        .gte('created_at', startOfDay.toIso8601String())
+        .lt('created_at', endOfDay.toIso8601String());
+
+    if (existingAttendance.isNotEmpty) {
+      _showWarningDialog(userResponse, 'Attendance already recorded today', existingAttendance.first['status']);
+      return;
+    }
+
+    // Determine attendance status based on cutoff time
+    final checkInTime = DateTime.now();
+    final status = _determineAttendanceStatus(checkInTime);
+
+    // Record attendance
+    await _supabase.from('attendance').insert({
+      'user_id': userId,
+      'status': status,
+      'scanned_by': _supabase.auth.currentUser?.id,
+      'created_at': checkInTime.toIso8601String(),
     });
 
-    try {
-      // Parse the QR data
-      final Map<String, dynamic> qrInfo = jsonDecode(qrData);
-      
-      // Validate QR structure
-      if (!_isValidQRStructure(qrInfo)) {
-        _showErrorSnackBar('Invalid QR code format');
-        return;
-      }
+    // Show success dialog
+    _showSuccessDialog(userResponse, status, checkInTime);
 
-      // Check if QR code is expired
-      final expiresAt = DateTime.parse(qrInfo['expires_at']);
-      if (DateTime.now().isAfter(expiresAt)) {
-        _showErrorSnackBar('QR code has expired');
-        return;
-      }
-
-      // Verify QR code exists in database and is active
-      final qrResponse = await _supabase
-          .from('qr_images')
-          .select('user_id, is_active')
-          .eq('qr_data', qrData)
-          .eq('is_active', true)
-          .single();
-
-      if (qrResponse.isEmpty) {
-        _showErrorSnackBar('QR code not found or inactive');
-        return;
-      }
-
-      final userId = qrResponse['user_id'];
-
-      // Get user information
-      final userResponse = await _supabase
-          .from('users')
-          .select('''
-            firstname, middlename, lastname, extensionname,
-            student_id, role,
-            companies!inner(name),
-            platoons!inner(name)
-          ''')
-          .eq('id', userId)
-          .single();
-
-      // Check if user already has attendance today
-      final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-      final endOfDay = startOfDay.add(const Duration(days: 1));
-
-      final existingAttendance = await _supabase
-          .from('attendance')
-          .select('id, status')
-          .eq('user_id', userId)
-          .gte('created_at', startOfDay.toIso8601String())
-          .lt('created_at', endOfDay.toIso8601String());
-
-      if (existingAttendance.isNotEmpty) {
-        _showWarningDialog(userResponse, 'Attendance already recorded today', existingAttendance.first['status']);
-        return;
-      }
-
-      // Determine attendance status based on cutoff time
-      final checkInTime = DateTime.now();
-      final status = _determineAttendanceStatus(checkInTime);
-
-      // Record attendance
-      await _supabase.from('attendance').insert({
-        'user_id': userId,
-        'status': status,
-        'scanned_by': _supabase.auth.currentUser?.id,
-        'created_at': checkInTime.toIso8601String(),
-      });
-
-      // Show success dialog
-      _showSuccessDialog(userResponse, status, checkInTime);
-
-    } catch (e) {
-      print('Error processing QR code: $e');
-      _showErrorSnackBar('Error processing QR code: ${e.toString()}');
-    } finally {
-      setState(() {
-        isProcessingQR = false;
-      });
-    }
+  } catch (e) {
+    print('Error processing QR code: $e');
+    _showErrorSnackBar('Error processing QR code: ${e.toString()}');
+  } finally {
+    setState(() {
+      isProcessingQR = false;
+    });
   }
+}
 
   bool _isValidQRStructure(Map<String, dynamic> qrInfo) {
     return qrInfo.containsKey('user_id') &&
