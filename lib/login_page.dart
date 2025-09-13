@@ -43,8 +43,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
     _animationController.forward();
     
-    // Check if user should be automatically logged in
-    _checkAutoLogin();
+    // Load saved email if exists (but don't auto-login)
+    _loadSavedEmail();
   }
 
   @override
@@ -55,24 +55,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // Check if user has enabled "Remember Me" and auto-login
-  Future<void> _checkAutoLogin() async {
+  // Load saved email for convenience (but don't auto-login)
+  Future<void> _loadSavedEmail() async {
     final prefs = await SharedPreferences.getInstance();
-    final shouldRemember = prefs.getBool('remember_me') ?? false;
+    final savedEmail = prefs.getString('saved_email');
+    final rememberMe = prefs.getBool('remember_me') ?? false;
     
-    if (shouldRemember) {
-      final email = prefs.getString('saved_email');
-      final password = prefs.getString('saved_password');
-      
-      if (email != null && password != null) {
-        // Auto-fill the form
-        _emailController.text = email;
-        _passwordController.text = password;
-        _rememberMe = true;
-        
-        // Automatically attempt login
-        await _handleLogin(isAutoLogin: true);
-      }
+    if (savedEmail != null && rememberMe) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _rememberMe = rememberMe;
+      });
     }
   }
 
@@ -98,7 +91,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     await prefs.remove('saved_password');
   }
 
-  Future<void> _handleLogin({bool isAutoLogin = false}) async {
+  Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -143,12 +136,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         final String userRole = userResponse['role'] ?? 'Student';
 
         setState(() {
-          _successMessage = isAutoLogin 
-              ? 'Welcome back! Redirecting...' 
-              : 'Login successful! Redirecting...';
+          _successMessage = 'Login successful! Redirecting...';
         });
 
-        Future.delayed(Duration(milliseconds: isAutoLogin ? 800 : 1200), () {
+        Future.delayed(const Duration(milliseconds: 1200), () {
           if (!mounted) return;
           
           if (!isConfigured) {

@@ -30,4 +30,14 @@ class AuthUtils {
       'password': prefs.getString('saved_password'),
     };
   }
+
+  // Check if user should be automatically logged in
+  static Future<bool> shouldAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rememberMe = prefs.getBool('remember_me') ?? false;
+    final email = prefs.getString('saved_email');
+    final password = prefs.getString('saved_password');
+    
+    return rememberMe && email != null && password != null;
+  }
 }
