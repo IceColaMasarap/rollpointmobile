@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'login_page.dart'; // make sure path is correct
+import 'auth_utils.dart'; // Import the new utility class
 
 class InstructorSettingsPage extends StatefulWidget {
   const InstructorSettingsPage({super.key});
@@ -994,43 +996,84 @@ class _InstructorSettingsPageState extends State<InstructorSettingsPage> {
   }
 
   void _showLogoutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await _supabase.auth.signOut();
-                if (mounted) {
-                  Navigator.pop(context);
-                  Navigator.of(context).pushReplacementNamed('/login');
-                }
-              } catch (error) {
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error logging out: $error'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-            ),
-            child: const Text('Logout'),
-          ),
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      title: Row(
+        children: const [
+          Icon(Icons.logout, color: Colors.red),
+          SizedBox(width: 8),
+          Text('Logout'),
         ],
       ),
-    );
-  }
+      content: const Text(
+        'Are you sure you want to log out?',
+        style: TextStyle(fontSize: 16),
+      ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context),
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            minimumSize: const Size(100, 48),
+          ),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            try {
+              // Clear saved credentials for "Remember Me"
+                await AuthUtils.clearSavedCredentials();
+              
+              // Sign out from Supabase
+              await Supabase.instance.client.auth.signOut();
+              
+              if (context.mounted) {
+                Navigator.pop(context);
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+                );
+              }
+            } catch (error) {
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error logging out: $error'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            minimumSize: const Size(100, 48),
+          ),
+          child: const Text(
+            'Logout',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 }

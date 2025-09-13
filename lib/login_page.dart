@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/instructor/instructor_main_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'widgets/camouflage_background.dart';
 import 'register_page.dart';
 import 'forgot_password_page.dart';
@@ -20,6 +21,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _rememberMe = false;
   String? _errorMessage;
   String? _successMessage;
 
@@ -40,6 +42,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
+    
+    // Check if user should be automatically logged in
+    _checkAutoLogin();
   }
 
   @override
@@ -50,87 +55,138 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-  if (!_formKey.currentState!.validate()) return;
+  // Check if user has enabled "Remember Me" and auto-login
+  Future<void> _checkAutoLogin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shouldRemember = prefs.getBool('remember_me') ?? false;
+    
+    if (shouldRemember) {
+      final email = prefs.getString('saved_email');
+      final password = prefs.getString('saved_password');
+      
+      if (email != null && password != null) {
+        // Auto-fill the form
+        _emailController.text = email;
+        _passwordController.text = password;
+        _rememberMe = true;
+        
+        // Automatically attempt login
+        await _handleLogin(isAutoLogin: true);
+      }
+    }
+  }
 
-  setState(() {
-    _isLoading = true;
-    _errorMessage = null;
-    _successMessage = null;
-  });
+  // Save login credentials
+  Future<void> _saveCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setBool('remember_me', true);
+      await prefs.setString('saved_email', _emailController.text.trim());
+      await prefs.setString('saved_password', _passwordController.text.trim());
+    } else {
+      await prefs.remove('remember_me');
+      await prefs.remove('saved_email');
+      await prefs.remove('saved_password');
+    }
+  }
 
-  try {
-    final response = await _supabase.auth.signInWithPassword(
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-    );
+  // Clear saved credentials (for logout)
+  static Future<void> clearSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('remember_me');
+    await prefs.remove('saved_email');
+    await prefs.remove('saved_password');
+  }
 
-    if (response.session != null) {
-      // Fetch user info including status
-      final userResponse = await _supabase
-          .from('users')
-          .select('is_configured, role, status')
-          .eq('id', response.user!.id)
-          .single();
+  Future<void> _handleLogin({bool isAutoLogin = false}) async {
+    if (!_formKey.currentState!.validate()) return;
 
-      final String status = userResponse['status'] ?? 'active';
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _successMessage = null;
+    });
 
-      if (status == 'archived') {
-        // Block login if archived
+    try {
+      final response = await _supabase.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (response.session != null) {
+        // Save credentials if remember me is checked
+        await _saveCredentials();
+
+        // Fetch user info including status
+        final userResponse = await _supabase
+            .from('users')
+            .select('is_configured, role, status')
+            .eq('id', response.user!.id)
+            .single();
+
+        final String status = userResponse['status'] ?? 'active';
+
+        if (status == 'archived') {
+          // Block login if archived and clear saved credentials
+          await clearSavedCredentials();
+          setState(() {
+            _errorMessage =
+                "This account has been archived. Please contact the administrator.";
+          });
+
+          // Force sign out so no session stays active
+          await _supabase.auth.signOut();
+          return;
+        }
+
+        final bool isConfigured = userResponse['is_configured'] ?? false;
+        final String userRole = userResponse['role'] ?? 'Student';
+
         setState(() {
-          _errorMessage =
-              "This account has been archived. Please contact the administrator.";
+          _successMessage = isAutoLogin 
+              ? 'Welcome back! Redirecting...' 
+              : 'Login successful! Redirecting...';
         });
 
-        // Force sign out so no session stays active
-        await _supabase.auth.signOut();
-        return;
+        Future.delayed(Duration(milliseconds: isAutoLogin ? 800 : 1200), () {
+          if (!mounted) return;
+          
+          if (!isConfigured) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
+            );
+          } else if (userRole == 'Instructor') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const InstructorMainScreen()),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const MainScreen()),
+            );
+          }
+        });
+      } else {
+        setState(() {
+          _errorMessage = "Login failed: No active session.";
+        });
       }
-
-      final bool isConfigured = userResponse['is_configured'] ?? false;
-      final String userRole = userResponse['role'] ?? 'Student';
-
+    } on AuthException catch (authError) {
       setState(() {
-        _successMessage = 'Login successful! Redirecting...';
+        _errorMessage = "Login failed: ${authError.message}";
       });
-
-      Future.delayed(const Duration(milliseconds: 1200), () {
-        if (!isConfigured) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const ProfileSetupPage()),
-          );
-        } else if (userRole == 'Instructor') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const InstructorMainScreen()),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const MainScreen()),
-          );
-        }
-      });
-    } else {
+    } catch (error) {
       setState(() {
-        _errorMessage = "Login failed: No active session.";
+        _errorMessage = "Unexpected error: $error";
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
       });
     }
-  } on AuthException catch (authError) {
-    setState(() {
-      _errorMessage = "Login failed: ${authError.message}";
-    });
-  } catch (error) {
-    setState(() {
-      _errorMessage = "Unexpected error: $error";
-    });
-  } finally {
-    setState(() {
-      _isLoading = false;
-    });
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -214,13 +270,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
-                'lib/assets/logoName1.png', // or 'assets/logoName.png' if you follow convention
-                height: compact
-                    ? 70
-                    : 110, // adjust size to match old text size
+                'lib/assets/logoName1.png',
+                height: compact ? 70 : 110,
               ),
-              SizedBox(height: 16),
-
+              const SizedBox(height: 16),
               Text(
                 'Streamline attendance tracking with smart QR technology',
                 style: TextStyle(
@@ -287,26 +340,46 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               hint: 'Enter your password',
               isPassword: true,
             ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ForgotPasswordPage(),
-                    ),
-                  );
-                },
-                child: const Text(
-                  "Forgot password?",
+            const SizedBox(height: 15),
+            // Remember Me Checkbox
+            Row(
+              children: [
+                Checkbox(
+                  value: _rememberMe,
+                  onChanged: (value) {
+                    setState(() {
+                      _rememberMe = value ?? false;
+                    });
+                  },
+                  activeColor: const Color(0xFF059669),
+                ),
+                const Text(
+                  'Remember me',
                   style: TextStyle(
-                    color: Color(0xFF059669),
+                    color: Color(0xFF374151),
                     fontSize: 14,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ForgotPasswordPage(),
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    "Forgot password?",
+                    style: TextStyle(
+                      color: Color(0xFF059669),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 25),
             _buildLoginButton(),
@@ -381,7 +454,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   Widget _buildLoginButton() {
     return ElevatedButton(
-      onPressed: _isLoading ? null : _handleLogin,
+      onPressed: _isLoading ? null : () => _handleLogin(),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF059669),
         foregroundColor: Colors.white,

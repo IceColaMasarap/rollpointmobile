@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'login_page.dart'; // make sure path is correct
+import 'auth_utils.dart'; // Import the new utility class
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -223,7 +225,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: emailController,
-                    enabled: false, // 🔒 makes it read-only/disabled
+                  enabled: false, // 🔒 makes it read-only/disabled
                   decoration: const InputDecoration(
                     labelText: 'Email',
                     border: OutlineInputBorder(),
@@ -286,183 +288,183 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _editMilitaryInfo() async {
-  // Controllers for military information
-  final TextEditingController idNumberController = 
-      TextEditingController(text: _userProfile?['student_id'] ?? '');
-  
-  // Fetch lists from database
-  List<Map<String, dynamic>> companies = [];
-  List<Map<String, dynamic>> platoons = [];
-  List<Map<String, dynamic>> schools = [];
-  
-  try {
-    final companiesResponse = await _supabase
-        .from('companies')
-        .select('id, name')
-        .order('name');
-    companies = List<Map<String, dynamic>>.from(companiesResponse);
+    // Controllers for military information
+    final TextEditingController idNumberController = 
+        TextEditingController(text: _userProfile?['student_id'] ?? '');
     
-    final platoonsResponse = await _supabase
-        .from('platoons')
-        .select('id, name')
-        .order('name');
-    platoons = List<Map<String, dynamic>>.from(platoonsResponse);
+    // Fetch lists from database
+    List<Map<String, dynamic>> companies = [];
+    List<Map<String, dynamic>> platoons = [];
+    List<Map<String, dynamic>> schools = [];
     
-    final schoolsResponse = await _supabase
-        .from('schools')
-        .select('id, name')
-        .order('name');
-    schools = List<Map<String, dynamic>>.from(schoolsResponse);
-  } catch (error) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading data: $error'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    try {
+      final companiesResponse = await _supabase
+          .from('companies')
+          .select('id, name')
+          .order('name');
+      companies = List<Map<String, dynamic>>.from(companiesResponse);
+      
+      final platoonsResponse = await _supabase
+          .from('platoons')
+          .select('id, name')
+          .order('name');
+      platoons = List<Map<String, dynamic>>.from(platoonsResponse);
+      
+      final schoolsResponse = await _supabase
+          .from('schools')
+          .select('id, name')
+          .order('name');
+      schools = List<Map<String, dynamic>>.from(schoolsResponse);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading data: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
     }
-    return;
-  }
-  
-  // Get current values - use IDs instead of names for comparison
-  int? selectedCompanyId = _userProfile?['company_id'];
-  int? selectedPlatoonId = _userProfile?['platoon_id'];
-  int? selectedSchoolId = _userProfile?['school_id'];
+    
+    // Get current values - use IDs instead of names for comparison
+    int? selectedCompanyId = _userProfile?['company_id'];
+    int? selectedPlatoonId = _userProfile?['platoon_id'];
+    int? selectedSchoolId = _userProfile?['school_id'];
 
-  return showDialog<void>(
-    context: context,
-    builder: (BuildContext context) {
-      return StatefulBuilder(
-        builder: (context, setDialogState) { // Changed from setState to setDialogState
-          return AlertDialog(
-            title: const Text('Edit Military Information'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<int>(
-                    value: selectedSchoolId,
-                    decoration: const InputDecoration(
-                      labelText: 'School/Institution',
-                      border: OutlineInputBorder(),
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Edit Military Information'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<int>(
+                      value: selectedSchoolId,
+                      decoration: const InputDecoration(
+                        labelText: 'School/Institution',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: schools.map<DropdownMenuItem<int>>((school) {
+                        return DropdownMenuItem<int>(
+                          value: school['id'],
+                          child: Text(school['name']),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedSchoolId = value;
+                        });
+                      },
                     ),
-                    items: schools.map<DropdownMenuItem<int>>((school) {
-                      return DropdownMenuItem<int>(
-                        value: school['id'],
-                        child: Text(school['name']),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setDialogState(() { // Use setDialogState instead of setState
-                        selectedSchoolId = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: idNumberController,
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: idNumberController,
                       enabled: false, // 🔒 makes it read-only/disabled
-                    decoration: const InputDecoration(
-                      labelText: 'ID Number',
-                      border: OutlineInputBorder(),
+                      decoration: const InputDecoration(
+                        labelText: 'ID Number',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    value: selectedCompanyId,
-                    decoration: const InputDecoration(
-                      labelText: 'Company',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      value: selectedCompanyId,
+                      decoration: const InputDecoration(
+                        labelText: 'Company',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: companies.map<DropdownMenuItem<int>>((company) {
+                        return DropdownMenuItem<int>(
+                          value: company['id'],
+                          child: Text(company['name']),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedCompanyId = value;
+                        });
+                      },
                     ),
-                    items: companies.map<DropdownMenuItem<int>>((company) {
-                      return DropdownMenuItem<int>(
-                        value: company['id'],
-                        child: Text(company['name']),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setDialogState(() { // Use setDialogState instead of setState
-                        selectedCompanyId = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    value: selectedPlatoonId,
-                    decoration: const InputDecoration(
-                      labelText: 'Platoon',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      value: selectedPlatoonId,
+                      decoration: const InputDecoration(
+                        labelText: 'Platoon',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: platoons.map<DropdownMenuItem<int>>((platoon) {
+                        return DropdownMenuItem<int>(
+                          value: platoon['id'],
+                          child: Text(platoon['name']),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedPlatoonId = value;
+                        });
+                      },
                     ),
-                    items: platoons.map<DropdownMenuItem<int>>((platoon) {
-                      return DropdownMenuItem<int>(
-                        value: platoon['id'],
-                        child: Text(platoon['name']),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setDialogState(() { // Use setDialogState instead of setState
-                        selectedPlatoonId = value;
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                child: const Text('Cancel'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
+                  ],
                 ),
-                child: const Text('Save Changes'),
-                onPressed: () async {
-                  try {
-                    final user = _supabase.auth.currentUser;
-                    if (user == null) return;
-
-                    await _supabase.from('users').update({
-                      'student_id': idNumberController.text,
-                      'school_id': selectedSchoolId,
-                      'company_id': selectedCompanyId,
-                      'platoon_id': selectedPlatoonId,
-                    }).eq('id', user.id);
-
-                    await _loadUserProfile(); // Refresh profile data
-
-                    if (mounted) {
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Military information updated successfully'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  } catch (error) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error updating military information: $error'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
               ),
-            ],
-          );
-        },
-      );
-    },
-  );
-}
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                  ),
+                  child: const Text('Save Changes'),
+                  onPressed: () async {
+                    try {
+                      final user = _supabase.auth.currentUser;
+                      if (user == null) return;
+
+                      await _supabase.from('users').update({
+                        'student_id': idNumberController.text,
+                        'school_id': selectedSchoolId,
+                        'company_id': selectedCompanyId,
+                        'platoon_id': selectedPlatoonId,
+                      }).eq('id', user.id);
+
+                      await _loadUserProfile(); // Refresh profile data
+
+                      if (mounted) {
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Military information updated successfully'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
+                    } catch (error) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error updating military information: $error'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   Future<void> _editAddressInfo() async {
     final address = _userProfile?['addresses'] ?? {};
@@ -996,23 +998,54 @@ class _ProfilePageState extends State<ProfilePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.logout, color: Colors.red),
+            SizedBox(width: 8),
+            Text('Logout'),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to log out?',
+          style: TextStyle(fontSize: 16),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              minimumSize: const Size(100, 48),
+            ),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontSize: 16),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
               try {
-                await _supabase.auth.signOut();
-                if (mounted) {
+                // Clear saved credentials for "Remember Me"
+                await AuthUtils.clearSavedCredentials();
+                
+                // Sign out from Supabase
+                await Supabase.instance.client.auth.signOut();
+                
+                if (context.mounted) {
                   Navigator.pop(context);
-                  Navigator.of(context).pushReplacementNamed('/login');
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (route) => false,
+                  );
                 }
               } catch (error) {
-                if (mounted) {
+                if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -1024,9 +1057,18 @@ class _ProfilePageState extends State<ProfilePage> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              minimumSize: const Size(100, 48),
             ),
-            child: const Text('Logout'),
+            child: const Text(
+              'Logout',
+              style: TextStyle(fontSize: 16),
+            ),
           ),
         ],
       ),
