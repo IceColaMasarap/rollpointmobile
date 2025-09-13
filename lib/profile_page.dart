@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart'; // make sure path is correct
 import 'auth_utils.dart'; // Import the new utility class
-
+import 'edit_address_page.dart'; // Add this import
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
@@ -14,6 +14,7 @@ class _ProfilePageState extends State<ProfilePage> {
   SupabaseClient get _supabase => Supabase.instance.client;
   Map<String, dynamic>? _userProfile;
   bool _isLoading = true;
+  String? errorMessage = null; // ✅ Add this
 
   @override
   void initState() {
@@ -64,131 +65,430 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _changePassword() async {
-    final TextEditingController currentPasswordController = TextEditingController();
+    final TextEditingController currentPasswordController =
+        TextEditingController();
     final TextEditingController newPasswordController = TextEditingController();
-    final TextEditingController confirmPasswordController = TextEditingController();
+    final TextEditingController confirmPasswordController =
+        TextEditingController();
+    bool isLoading = false;
+    bool showCurrentPassword = false;
+    bool showNewPassword = false;
+    bool showConfirmPassword = false;
+    String? dialogErrorMessage; // Add this local variable
 
     return showDialog<void>(
       context: context,
+      barrierDismissible: false, // Prevent dismissing by tapping outside
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Change Password'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: currentPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Current Password',
-                    border: OutlineInputBorder(),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.lock_outline,
+                    color: const Color.fromARGB(
+                      255,
+                      55,
+                      139,
+                      58,
+                    ), // lock color set to green
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Change Password'),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.8,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Enter your current password to verify your identity, then set a new password.',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: currentPasswordController,
+                        obscureText: !showCurrentPassword,
+                        enabled: !isLoading,
+                        decoration: InputDecoration(
+                          labelText: 'Current Password *',
+                          prefixIcon: const Icon(Icons.lock),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              showCurrentPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                showCurrentPassword = !showCurrentPassword;
+                              });
+                            },
+                          ),
+                          border: const OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Theme.of(context).primaryColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (dialogErrorMessage != null) ...[
+                        Text(
+                          dialogErrorMessage!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: newPasswordController,
+                        obscureText: !showNewPassword,
+                        enabled: !isLoading,
+                        decoration: InputDecoration(
+                          labelText: 'New Password *',
+                          prefixIcon: const Icon(Icons.lock_reset),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              showNewPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                showNewPassword = !showNewPassword;
+                              });
+                            },
+                          ),
+                          border: const OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Theme.of(context).primaryColor,
+                            ),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(
+                            () {},
+                          ); // Trigger rebuild for validation feedback
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: confirmPasswordController,
+                        obscureText: !showConfirmPassword,
+                        enabled: !isLoading,
+                        decoration: InputDecoration(
+                          labelText: 'Confirm New Password *',
+                          prefixIcon: const Icon(Icons.lock_reset),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              showConfirmPassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                showConfirmPassword = !showConfirmPassword;
+                              });
+                            },
+                          ),
+                          border: const OutlineInputBorder(),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                              color: Theme.of(context).primaryColor,
+                            ),
+                          ),
+                          errorText:
+                              confirmPasswordController.text.isNotEmpty &&
+                                  newPasswordController.text !=
+                                      confirmPasswordController.text
+                              ? 'Passwords do not match'
+                              : null,
+                        ),
+                        onChanged: (value) {
+                          setState(
+                            () {},
+                          ); // Trigger rebuild for validation feedback
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      // Password strength indicator
+                      if (newPasswordController.text.isNotEmpty) ...[
+                        const Text(
+                          'Password Strength:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        _buildPasswordStrengthIndicator(
+                          newPasswordController.text,
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: newPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'New Password',
-                    border: OutlineInputBorder(),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: isLoading
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                        },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Color.fromARGB(
+                        255,
+                        0,
+                        0,
+                        0,
+                      ), // makes the text white
+                      decoration:
+                          TextDecoration.none, // removes underline (if any)
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: confirmPasswordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm New Password',
-                    border: OutlineInputBorder(),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
+                  onPressed:
+                      isLoading ||
+                          !_isFormValid(
+                            currentPasswordController.text,
+                            newPasswordController.text,
+                            confirmPasswordController.text,
+                          )
+                      ? null
+                      : () async {
+                          setState(() {
+                            isLoading = true;
+                            dialogErrorMessage = null; // Clear previous errors
+                          });
+
+                          try {
+                            // ✅ Add try-catch here
+                            await _performPasswordChange(
+                              context,
+                              currentPasswordController.text,
+                              newPasswordController.text,
+                              confirmPasswordController.text,
+                            );
+                          } catch (error) {
+                            // ✅ Catch the error here
+                            setState(() {
+                              dialogErrorMessage = error.toString().replaceAll(
+                                'Exception: ',
+                                '',
+                              );
+                            });
+                          }
+                          setState(() {
+                            isLoading = false;
+                          });
+                        },
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Text(
+                          'Change Password',
+                          style: TextStyle(
+                            color: Colors.white, // makes the text white
+                            decoration: TextDecoration
+                                .none, // removes underline (if any)
+                          ),
+                        ),
                 ),
               ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
-              ),
-              child: const Text('Change Password'),
-              onPressed: () async {
-                if (newPasswordController.text != confirmPasswordController.text) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Passwords do not match'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-
-                if (newPasswordController.text.length < 6) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Password must be at least 6 characters'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-
-                try {
-                  await _supabase.auth.updateUser(
-                    UserAttributes(password: newPasswordController.text),
-                  );
-                  
-                  // Store password history
-                  final user = _supabase.auth.currentUser;
-                  if (user != null) {
-                    await _supabase.from('password_history').insert({
-                      'user_id': user.id,
-                      'password_hash': newPasswordController.text, // In production, hash this
-                    });
-                  }
-
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Password changed successfully'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (error) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error changing password: $error'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-            ),
-          ],
+            );
+          },
         );
       },
     );
   }
 
+
+  bool _isFormValid(
+    String currentPassword,
+    String newPassword,
+    String confirmPassword,
+  ) {
+    return currentPassword.isNotEmpty &&
+        newPassword.isNotEmpty &&
+        confirmPassword.isNotEmpty &&
+        newPassword.length >= 6 && // Change from 8 to 6
+        newPassword == confirmPassword;
+  }
+
+  Widget _buildPasswordStrengthIndicator(String password) {
+    int strength = _calculatePasswordStrength(password);
+    Color color;
+    String label;
+
+    if (strength < 3) {
+      color = Colors.red;
+      label = 'Weak';
+    } else if (strength < 5) {
+      color = Colors.orange;
+      label = 'Medium';
+    } else {
+      color = Colors.green;
+      label = 'Strong';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: LinearProgressIndicator(
+                value: strength / 6,
+                backgroundColor: Colors.grey[300],
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  int _calculatePasswordStrength(String password) {
+    int strength = 0;
+
+    if (password.length >= 6) strength++; // Change from 8 to 6
+    if (password.length >= 12) strength++;
+    if (password.contains(RegExp(r'[a-z]'))) strength++;
+    if (password.contains(RegExp(r'[A-Z]'))) strength++;
+    if (password.contains(RegExp(r'[0-9]'))) strength++;
+    if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) strength++;
+
+    return strength;
+  }
+
+  Future<void> _performPasswordChange(
+    BuildContext context,
+    String currentPassword,
+    String newPassword,
+    String confirmPassword,
+  ) async {
+    try {
+      // Step 1: Verify current password by attempting to sign in
+      final user = _supabase.auth.currentUser;
+      if (user?.email == null) {
+        throw Exception('User not found');
+      }
+
+      // Attempt to sign in with current credentials to verify current password
+      try {
+        final AuthResponse response = await _supabase.auth.signInWithPassword(
+          email: user!.email!,
+          password: currentPassword,
+        );
+
+        if (response.user == null) {
+          throw Exception('Current password is incorrect');
+        }
+      } catch (e) {
+        throw Exception('Current password is incorrect');
+      }
+
+      // Step 2: Validate new password
+      if (newPassword != confirmPassword) {
+        throw Exception('New passwords do not match');
+      }
+
+      if (newPassword.length < 6) {
+        throw Exception(
+          'New password must be at least 6 characters long',
+        ); // Update message
+      }
+
+      if (currentPassword == newPassword) {
+        throw Exception('New password must be different from current password');
+      }
+
+      // Step 3: Update the password
+      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+
+      // Step 5: Show success message and close dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text(
+                  'Password changed successfully!',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF059669),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      throw error; // ✅ This will be caught by the try-catch in the button's onPressed
+    }
+  }
+
   Future<void> _editPersonalInfo() async {
-    final TextEditingController firstNameController = 
-        TextEditingController(text: _userProfile?['firstname'] ?? '');
-    final TextEditingController lastNameController = 
-        TextEditingController(text: _userProfile?['lastname'] ?? '');
-    final TextEditingController middleNameController = 
-        TextEditingController(text: _userProfile?['middlename'] ?? '');
-    final TextEditingController emailController = 
-        TextEditingController(text: _userProfile?['email'] ?? '');
+    final TextEditingController firstNameController = TextEditingController(
+      text: _userProfile?['firstname'] ?? '',
+    );
+    final TextEditingController lastNameController = TextEditingController(
+      text: _userProfile?['lastname'] ?? '',
+    );
+    final TextEditingController middleNameController = TextEditingController(
+      text: _userProfile?['middlename'] ?? '',
+    );
+    final TextEditingController emailController = TextEditingController(
+      text: _userProfile?['email'] ?? '',
+    );
 
     return showDialog<void>(
       context: context,
@@ -251,12 +551,15 @@ class _ProfilePageState extends State<ProfilePage> {
                   final user = _supabase.auth.currentUser;
                   if (user == null) return;
 
-                  await _supabase.from('users').update({
-                    'firstname': firstNameController.text,
-                    'lastname': lastNameController.text,
-                    'middlename': middleNameController.text,
-                    'email': emailController.text,
-                  }).eq('id', user.id);
+                  await _supabase
+                      .from('users')
+                      .update({
+                        'firstname': firstNameController.text,
+                        'lastname': lastNameController.text,
+                        'middlename': middleNameController.text,
+                        'email': emailController.text,
+                      })
+                      .eq('id', user.id);
 
                   await _loadUserProfile(); // Refresh profile data
 
@@ -264,7 +567,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Personal information updated successfully'),
+                        content: Text(
+                          'Personal information updated successfully',
+                        ),
                         backgroundColor: Colors.green,
                       ),
                     );
@@ -289,27 +594,28 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _editMilitaryInfo() async {
     // Controllers for military information
-    final TextEditingController idNumberController = 
-        TextEditingController(text: _userProfile?['student_id'] ?? '');
-    
+    final TextEditingController idNumberController = TextEditingController(
+      text: _userProfile?['student_id'] ?? '',
+    );
+
     // Fetch lists from database
     List<Map<String, dynamic>> companies = [];
     List<Map<String, dynamic>> platoons = [];
     List<Map<String, dynamic>> schools = [];
-    
+
     try {
       final companiesResponse = await _supabase
           .from('companies')
           .select('id, name')
           .order('name');
       companies = List<Map<String, dynamic>>.from(companiesResponse);
-      
+
       final platoonsResponse = await _supabase
           .from('platoons')
           .select('id, name')
           .order('name');
       platoons = List<Map<String, dynamic>>.from(platoonsResponse);
-      
+
       final schoolsResponse = await _supabase
           .from('schools')
           .select('id, name')
@@ -326,7 +632,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       return;
     }
-    
+
     // Get current values - use IDs instead of names for comparison
     int? selectedCompanyId = _userProfile?['company_id'];
     int? selectedPlatoonId = _userProfile?['platoon_id'];
@@ -346,7 +652,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     DropdownButtonFormField<int>(
                       value: selectedSchoolId,
                       decoration: const InputDecoration(
-                        labelText: 'School/Institution',
+                        labelText: 'School',
                         border: OutlineInputBorder(),
                       ),
                       items: schools.map<DropdownMenuItem<int>>((school) {
@@ -428,12 +734,15 @@ class _ProfilePageState extends State<ProfilePage> {
                       final user = _supabase.auth.currentUser;
                       if (user == null) return;
 
-                      await _supabase.from('users').update({
-                        'student_id': idNumberController.text,
-                        'school_id': selectedSchoolId,
-                        'company_id': selectedCompanyId,
-                        'platoon_id': selectedPlatoonId,
-                      }).eq('id', user.id);
+                      await _supabase
+                          .from('users')
+                          .update({
+                            'student_id': idNumberController.text,
+                            'school_id': selectedSchoolId,
+                            'company_id': selectedCompanyId,
+                            'platoon_id': selectedPlatoonId,
+                          })
+                          .eq('id', user.id);
 
                       await _loadUserProfile(); // Refresh profile data
 
@@ -441,7 +750,9 @@ class _ProfilePageState extends State<ProfilePage> {
                         Navigator.of(context).pop();
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Military information updated successfully'),
+                            content: Text(
+                              'Military information updated successfully',
+                            ),
                             backgroundColor: Colors.green,
                           ),
                         );
@@ -450,7 +761,9 @@ class _ProfilePageState extends State<ProfilePage> {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Error updating military information: $error'),
+                            content: Text(
+                              'Error updating military information: $error',
+                            ),
                             backgroundColor: Colors.red,
                           ),
                         );
@@ -467,124 +780,19 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _editAddressInfo() async {
-    final address = _userProfile?['addresses'] ?? {};
-    
-    final TextEditingController regionController = 
-        TextEditingController(text: address['region'] ?? '');
-    final TextEditingController provinceController = 
-        TextEditingController(text: address['province'] ?? '');
-    final TextEditingController cityController = 
-        TextEditingController(text: address['city'] ?? '');
-    final TextEditingController barangayController = 
-        TextEditingController(text: address['barangay'] ?? '');
-    final TextEditingController streetController = 
-        TextEditingController(text: address['street'] ?? '');
-
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Edit Address Information'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: regionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Region',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: provinceController,
-                  decoration: const InputDecoration(
-                    labelText: 'Province',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: cityController,
-                  decoration: const InputDecoration(
-                    labelText: 'City',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: barangayController,
-                  decoration: const InputDecoration(
-                    labelText: 'Barangay',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: streetController,
-                  decoration: const InputDecoration(
-                    labelText: 'Street',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF059669),
-              ),
-              child: const Text('Save Changes'),
-              onPressed: () async {
-                try {
-                  final user = _supabase.auth.currentUser;
-                  if (user == null) return;
-
-                  await _supabase.from('addresses').update({
-                    'region': regionController.text,
-                    'province': provinceController.text,
-                    'city': cityController.text,
-                    'barangay': barangayController.text,
-                    'street': streetController.text,
-                  }).eq('id', user.id);
-
-                  await _loadUserProfile(); // Refresh profile data
-
-                  if (mounted) {
-                    Navigator.of(context).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Address information updated successfully'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (error) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error updating address: $error'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
+  final result = await Navigator.of(context).push<bool>(
+    MaterialPageRoute(
+      builder: (context) => EditAddressPage(
+        currentAddress: _userProfile?['addresses'],
+      ),
+    ),
+  );
+  
+  // If address was updated successfully, refresh the profile
+  if (result == true) {
+    await _loadUserProfile();
   }
-
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -594,9 +802,7 @@ class _ProfilePageState extends State<ProfilePage> {
         foregroundColor: Colors.white,
         title: const Text(
           'Settings',
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
         elevation: 0,
       ),
@@ -610,34 +816,34 @@ class _ProfilePageState extends State<ProfilePage> {
                   children: [
                     // Profile Header
                     _buildProfileHeader(),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // Personal Information Section
                     _buildSection(
                       title: 'Personal Information',
                       onEdit: _editPersonalInfo,
                       content: _buildPersonalInfoContent(),
                     ),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // Military Information Section
                     _buildSection(
                       title: 'Military Information',
                       onEdit: _editMilitaryInfo,
                       content: _buildMilitaryInfoContent(),
                     ),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // Address Information Section
                     _buildSection(
                       title: 'Address Information',
                       onEdit: _editAddressInfo,
                       content: _buildAddressInfoContent(),
                     ),
-                    
+
                     const SizedBox(height: 24),
 
                     const Text(
@@ -749,14 +955,10 @@ class _ProfilePageState extends State<ProfilePage> {
                 color: const Color(0xFF059669),
                 borderRadius: BorderRadius.circular(30),
               ),
-              child: const Icon(
-                Icons.person,
-                color: Colors.white,
-                size: 30,
-              ),
+              child: const Icon(Icons.person, color: Colors.white, size: 30),
             ),
             const SizedBox(width: 16),
-            
+
             // Profile Info
             Expanded(
               child: Column(
@@ -795,55 +997,60 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildSection({
-    required String title,
-    required VoidCallback onEdit,
-    required Widget content,
-  }) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
+  required String title,
+  required VoidCallback onEdit,
+  required Widget content,
+}) {
+  return Container(
+    width: double.infinity,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF374151),
+        onTap: onEdit,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
                   ),
-                ),
-                IconButton(
-                  onPressed: onEdit,
-                  icon: const Icon(
-                    Icons.edit,
+                  const Icon(
+                    Icons.chevron_right,
                     color: Color(0xFF6B7280),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            content,
-          ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              content,
+            ],
+          ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildPersonalInfoContent() {
     return Column(
@@ -861,10 +1068,25 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildInfoRow('School/Institution', _userProfile?['schools'] != null ? _userProfile!['schools']['name'] : 'Not set'),
+        _buildInfoRow(
+          'School',
+          _userProfile?['schools'] != null
+              ? _userProfile!['schools']['name']
+              : 'Not set',
+        ),
         _buildInfoRow('ID Number', _userProfile?['student_id'] ?? 'Not set'),
-        _buildInfoRow('Company', _userProfile?['companies'] != null ? _userProfile!['companies']['name'] : 'Not set'),
-        _buildInfoRow('Platoon', _userProfile?['platoons'] != null ? _userProfile!['platoons']['name'] : 'Not set'),
+        _buildInfoRow(
+          'Company',
+          _userProfile?['companies'] != null
+              ? _userProfile!['companies']['name']
+              : 'Not set',
+        ),
+        _buildInfoRow(
+          'Platoon',
+          _userProfile?['platoons'] != null
+              ? _userProfile!['platoons']['name']
+              : 'Not set',
+        ),
       ],
     );
   }
@@ -902,9 +1124,7 @@ class _ProfilePageState extends State<ProfilePage> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(color: Color(0xFF6B7280)),
             ),
           ),
         ],
@@ -949,11 +1169,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     color: const Color(0xFF059669).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Icon(
-                    icon,
-                    color: const Color(0xFF059669),
-                    size: 20,
-                  ),
+                  child: Icon(icon, color: const Color(0xFF059669), size: 20),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -982,10 +1198,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 if (trailing != null)
                   trailing
                 else if (onTap != null)
-                  const Icon(
-                    Icons.chevron_right,
-                    color: Color(0xFF6B7280),
-                  ),
+                  const Icon(Icons.chevron_right, color: Color(0xFF6B7280)),
               ],
             ),
           ),
@@ -998,9 +1211,7 @@ class _ProfilePageState extends State<ProfilePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: const [
             Icon(Icons.logout, color: Colors.red),
@@ -1023,20 +1234,17 @@ class _ProfilePageState extends State<ProfilePage> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               minimumSize: const Size(100, 48),
             ),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontSize: 16),
-            ),
+            child: const Text('Cancel', style: TextStyle(fontSize: 16)),
           ),
           ElevatedButton(
             onPressed: () async {
               try {
                 // Clear saved credentials for "Remember Me"
                 await AuthUtils.clearSavedCredentials();
-                
+
                 // Sign out from Supabase
                 await Supabase.instance.client.auth.signOut();
-                
+
                 if (context.mounted) {
                   Navigator.pop(context);
                   Navigator.of(context).pushAndRemoveUntil(
@@ -1065,10 +1273,7 @@ class _ProfilePageState extends State<ProfilePage> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               minimumSize: const Size(100, 48),
             ),
-            child: const Text(
-              'Logout',
-              style: TextStyle(fontSize: 16),
-            ),
+            child: const Text('Logout', style: TextStyle(fontSize: 16)),
           ),
         ],
       ),

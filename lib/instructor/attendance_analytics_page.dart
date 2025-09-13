@@ -30,7 +30,8 @@ class _AttendanceAnalyticsPageState extends State<AttendanceAnalyticsPage> {
   
   bool isLoading = true;
   String selectedTimeframe = 'week'; // week, month, semester
-  
+  bool isTimeframeLoading = false;
+
   // Analytics data
   Map<String, dynamic> overallStats = {};
   List<Map<String, dynamic>> weeklyTrends = [];
@@ -41,26 +42,35 @@ class _AttendanceAnalyticsPageState extends State<AttendanceAnalyticsPage> {
   @override
   void initState() {
     super.initState();
-    _loadAnalyticsData();
+_loadAnalyticsData(isTimeframeChange: false);
   }
 
-  Future<void> _loadAnalyticsData() async {
-    setState(() {
+  Future<void> _loadAnalyticsData({bool isTimeframeChange = false}) async {
+  setState(() {
+    if (isTimeframeChange) {
+      isTimeframeLoading = true;
+    } else {
       isLoading = true;
-    });
+    }
+  });
 
-    await Future.wait([
-      _loadOverallStats(),
-      _loadWeeklyTrends(),
-      _loadStudentPerformance(),
-      _loadTimeAnalysis(),
-      _loadComparisonData(),
-    ]);
+  await Future.wait([
+    _loadOverallStats(),
+    _loadWeeklyTrends(),
+    _loadStudentPerformance(),
+    _loadTimeAnalysis(),
+    _loadComparisonData(),
+  ]);
 
-    setState(() {
+  setState(() {
+    if (isTimeframeChange) {
+      isTimeframeLoading = false;
+    } else {
       isLoading = false;
-    });
-  }
+    }
+  });
+}
+
 
   Future<void> _loadOverallStats() async {
     try {
@@ -561,43 +571,59 @@ class _AttendanceAnalyticsPageState extends State<AttendanceAnalyticsPage> {
             children: [
               // Timeframe Selector
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Timeframe: ${widget.companyName ?? 'All Companies'} - ${widget.platoonName ?? 'All Platoons'}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF374151),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        _buildTimeframeChip('Week', 'week'),
-                        const SizedBox(width: 8),
-                        _buildTimeframeChip('Month', 'month'),
-                        const SizedBox(width: 8),
-                        _buildTimeframeChip('Semester', 'semester'),
-                      ],
-                    ),
-                  ],
-                ),
+  width: double.infinity,
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(12),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.05),
+        blurRadius: 10,
+        offset: const Offset(0, 2),
+      ),
+    ],
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Timeframe: ${widget.companyName ?? 'All Companies'} - ${widget.platoonName ?? 'All Platoons'}',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF374151),
               ),
+            ),
+          ),
+          if (isTimeframeLoading)
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                color: Color(0xFF059669),
+                strokeWidth: 2,
+              ),
+            ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          _buildTimeframeChip('Week', 'week'),
+          const SizedBox(width: 8),
+          _buildTimeframeChip('Month', 'month'),
+          const SizedBox(width: 8),
+          _buildTimeframeChip('Semester', 'semester'),
+        ],
+      ),
+    ],
+  ),
+),
+
 
               const SizedBox(height: 24),
 
@@ -1025,11 +1051,11 @@ class _AttendanceAnalyticsPageState extends State<AttendanceAnalyticsPage> {
     final isSelected = selectedTimeframe == value;
     return GestureDetector(
       onTap: () {
-        setState(() {
-          selectedTimeframe = value;
-        });
-        _loadAnalyticsData();
-      },
+  setState(() {
+    selectedTimeframe = value;
+  });
+  _loadAnalyticsData(isTimeframeChange: true);
+},
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(

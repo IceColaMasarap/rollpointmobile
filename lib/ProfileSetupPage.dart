@@ -366,7 +366,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
       case 2: // Details step
         if (_selectedSchool == null) {
-          _showErrorSnackBar('School/Institution is required');
+          _showErrorSnackBar('School is required');
           return false;
         }
         if (_idNumberController.text.trim().isEmpty) {
@@ -906,7 +906,7 @@ List<Map<String, dynamic>> _getFilteredPlatoons() {
               items: _schools
                   .map((school) => school['name'] as String)
                   .toList(),
-              hint: "School/Institution *",
+              hint: "School *",
               icon: Icons.school,
               onChanged: (value) {
                 setState(() {
