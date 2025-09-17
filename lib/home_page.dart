@@ -23,7 +23,7 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>> recentAttendance = [];
 
   // Encryption key - in production, this should be stored securely
-  static const String encryptionKey = 'your32characterlongencryptionkey!';
+  static const String encryptionKey = '12345678901234567890123456789012';
   late final encrypt.Encrypter encrypter;
 
   @override
