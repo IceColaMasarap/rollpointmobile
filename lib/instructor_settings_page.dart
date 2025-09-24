@@ -696,7 +696,7 @@ class _InstructorSettingsPageState extends State<InstructorSettingsPage> {
                     items: platoons.map<DropdownMenuItem<int>>((platoon) {
                       return DropdownMenuItem<int>(
                         value: platoon['id'],
-                        child: Text(platoon['name']),
+                        child: Text(platoon['namsdasde']),
                       );
                     }).toList(),
                     onChanged: (value) {
