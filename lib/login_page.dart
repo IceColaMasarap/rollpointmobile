@@ -110,7 +110,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         // Save credentials if remember me is checked
         await _saveCredentials();
 
-        // Fetch user info including status
         final userResponse = await _supabase
             .from('users')
             .select('is_configured, role, status')

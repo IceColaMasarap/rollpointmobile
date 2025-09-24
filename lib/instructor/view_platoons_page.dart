@@ -29,94 +29,78 @@ String _sortBy = 'name'; // 'name', 'attendance', 'student_count'
   }
 
   Future<void> _loadPlatoonsData() async {
-    try {
-      setState(() {
-        isLoading = true;
-      });
+  try {
+    setState(() {
+      isLoading = true;
+    });
 
-      // Get current user info to filter by their assignments
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return;
+    // Get current user info to filter by their assignments
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
 
-      // Fetch user's assignments with company and platoon info
-      final assignmentsResponse = await _supabase
-          .from('instructor_assignments')
-          .select('''
-            company_id, platoon_id,
-            companies(id, name),
-            platoons(id, name)
-          ''')
-          .eq('instructor_id', userId);
+    // Fetch user's assignments using stored procedure
+    final assignmentsResponse = await _supabase
+        .rpc('get_instructor_platoons_with_company_info', 
+             params: {'instructor_uuid': userId});
 
-      // Extract unique platoons from assignments
-      final List<Map<String, dynamic>> uniquePlatoons = [];
-      final Set<String> seenPlatoons = {};
+    // Transform the response to match expected structure
+    final List<Map<String, dynamic>> uniquePlatoons = assignmentsResponse.map<Map<String, dynamic>>((assignment) => {
+      'platoon_id': assignment['platoon_id'],
+      'platoon_name': assignment['platoon_name'],
+      'company_id': assignment['company_id'],
+      'company_name': assignment['company_name'],
+    }).toList();
 
-      for (final assignment in assignmentsResponse) {
-        final platoon = assignment['platoons'];
-        final company = assignment['companies'];
-        final platoonId = platoon['id'].toString();
-        
-        if (!seenPlatoons.contains(platoonId)) {
-          seenPlatoons.add(platoonId);
-          uniquePlatoons.add({
-            'platoon_id': platoon['id'],
-            'platoon_name': platoon['name'],
-            'company_id': company['id'],
-            'company_name': company['name'],
-          });
-        }
-      }
+    // Get student counts for each platoon (no join needed - keep as is)
+    for (final platoon in uniquePlatoons) {
+      final studentsResponse = await _supabase
+          .from('users')
+          .select('id')
+          .eq('role', 'Student')
+          .eq('company_id', platoon['company_id'])
+          .eq('platoon_id', platoon['platoon_id'])
+          .neq('status', 'archived');
 
-      // Get student counts for each platoon
-      for (final platoon in uniquePlatoons) {
-        final studentsResponse = await _supabase
-            .from('users')
-            .select('id')
-            .eq('role', 'Student')
-            .eq('company_id', platoon['company_id'])
-            .eq('platoon_id', platoon['platoon_id'])
-            .neq('status', 'archived');
+      platoon['student_count'] = studentsResponse.length;
+      
+      // Get today's attendance count (no join needed - keep as is)
+      final today = DateTime.now();
+      final startOfDay = DateTime(today.year, today.month, today.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+      
+      final attendanceResponse = await _supabase
+          .from('attendance')
+          .select('user_id')
+          .inFilter('user_id', studentsResponse.map((s) => s['id']).toList())
+          .eq('status', 'present')
+          .gte('created_at', startOfDay.toIso8601String())
+          .lt('created_at', endOfDay.toIso8601String());
 
-        platoon['student_count'] = studentsResponse.length;
-        
-        // Get today's attendance count
-        final today = DateTime.now();
-        final startOfDay = DateTime(today.year, today.month, today.day);
-        final endOfDay = startOfDay.add(const Duration(days: 1));
-        
-        final attendanceResponse = await _supabase
-            .from('attendance')
-            .select('user_id')
-            .inFilter('user_id', studentsResponse.map((s) => s['id']).toList())
-            .eq('status', 'present')
-            .gte('created_at', startOfDay.toIso8601String())
-            .lt('created_at', endOfDay.toIso8601String());
-
-        platoon['present_count'] = attendanceResponse.length;
-      }
-
-      // Calculate total active students
-final totalActiveStudents = uniquePlatoons.fold<int>(
-  0,
-  (sum, platoon) => sum + ((platoon['student_count'] ?? 0) as int),
-);
-      setState(() {
-        platoons = uniquePlatoons;
-        stats = {
-          'totalPlatoons': uniquePlatoons.length,
-          'activeStudents': totalActiveStudents,
-        };
-      });
-
-    } catch (e) {
-      print('Error loading platoons data: $e');
-    } finally {
-      setState(() {
-        isLoading = false;
-      });
+      platoon['present_count'] = attendanceResponse.length;
     }
+
+    // Calculate total active students
+    final totalActiveStudents = uniquePlatoons.fold<int>(
+      0,
+      (sum, platoon) => sum + ((platoon['student_count'] ?? 0) as int),
+    );
+
+    setState(() {
+      platoons = uniquePlatoons;
+      stats = {
+        'totalPlatoons': uniquePlatoons.length,
+        'activeStudents': totalActiveStudents,
+      };
+    });
+
+  } catch (e) {
+    print('Error loading platoons data: $e');
+  } finally {
+    setState(() {
+      isLoading = false;
+    });
   }
+}
 
   List<Map<String, dynamic>> get filteredPlatoons {
     List<Map<String, dynamic>> filtered = platoons.where((platoon) {

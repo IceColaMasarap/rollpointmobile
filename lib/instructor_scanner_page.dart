@@ -453,7 +453,9 @@ void initState() {
     return checkInTime.isAfter(cutoffDateTime) ? 'late' : 'present';
   }
 
-  Future<void> _processQRCode(String? qrData) async {
+  // Replace the user information fetching in _processQRCode method
+
+Future<void> _processQRCode(String? qrData) async {
   if (qrData == null || isProcessingQR) return;
 
   setState(() {
@@ -492,11 +494,10 @@ void initState() {
       return;
     }
 
-    // Verify QR code exists in database and is active
     final qrResponse = await _supabase
         .from('qr_images')
         .select('user_id, is_active')
-        .eq('user_id', qrInfo['user_id'])  // Use user_id from decrypted data
+        .eq('user_id', qrInfo['user_id'])
         .eq('is_active', true)
         .gt('expires_at', DateTime.now().toIso8601String())
         .order('created_at', ascending: false)
@@ -509,20 +510,29 @@ void initState() {
 
     final userId = qrResponse.first['user_id'];
 
-    // Rest of the method remains the same...
-    // Get user information
+    // Get user information using stored procedure
     final userResponse = await _supabase
-        .from('users')
-        .select('''
-          firstname, middlename, lastname, extensionname,
-          student_id, role,
-          companies!inner(name),
-          platoons!inner(name)
-        ''')
-        .eq('id', userId)
-        .single();
+        .rpc('get_user_with_company_platoon_by_id', params: {'user_uuid': userId});
 
-    // Check if user already has attendance today
+    if (userResponse.isEmpty) {
+      _showErrorSnackBar('User not found');
+      return;
+    }
+
+    // Transform the response to match expected structure
+    final transformedUser = {
+      'id': userResponse.first['id'],
+      'firstname': userResponse.first['firstname'],
+      'middlename': userResponse.first['middlename'],
+      'lastname': userResponse.first['lastname'],
+      'extensionname': userResponse.first['extensionname'],
+      'student_id': userResponse.first['student_id'],
+      'role': userResponse.first['role'],
+      'companies': [{'name': userResponse.first['company_name']}],
+      'platoons': [{'name': userResponse.first['platoon_name']}],
+    };
+
+    // Check if user already has attendance today (no join needed - keep as is)
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
@@ -535,15 +545,13 @@ void initState() {
         .lt('created_at', endOfDay.toIso8601String());
 
     if (existingAttendance.isNotEmpty) {
-      _showWarningDialog(userResponse, 'Attendance already recorded today', existingAttendance.first['status']);
+      _showWarningDialog(transformedUser, 'Attendance already recorded today', existingAttendance.first['status']);
       return;
     }
 
-    // Determine attendance status based on cutoff time
     final checkInTime = DateTime.now();
     final status = _determineAttendanceStatus(checkInTime);
 
-    // Record attendance
     await _supabase.from('attendance').insert({
       'user_id': userId,
       'status': status,
@@ -551,8 +559,7 @@ void initState() {
       'created_at': checkInTime.toIso8601String(),
     });
 
-    // Show success dialog
-    _showSuccessDialog(userResponse, status, checkInTime);
+    _showSuccessDialog(transformedUser, status, checkInTime);
 
   } catch (e) {
     print('Error processing QR code: $e');
@@ -572,75 +579,82 @@ void initState() {
            qrInfo['type'] == 'attendance';
   }
 
-  Future<void> _processManualEntry(String studentId) async {
-    if (studentId.trim().isEmpty) return;
+  // Replace the _processManualEntry method
 
-    setState(() {
-      isProcessingQR = true;
+Future<void> _processManualEntry(String studentId) async {
+  if (studentId.trim().isEmpty) return;
+
+  setState(() {
+    isProcessingQR = true;
+  });
+
+  try {
+    // Find user by student ID using stored procedure
+    final userResponse = await _supabase
+        .rpc('get_user_with_company_platoon_by_student_id', 
+             params: {'student_id_param': studentId.trim()});
+
+    if (userResponse.isEmpty) {
+      _showErrorSnackBar('Student ID not found');
+      return;
+    }
+
+    // Transform the response to match expected structure
+    final transformedUser = {
+      'id': userResponse.first['id'],
+      'firstname': userResponse.first['firstname'],
+      'middlename': userResponse.first['middlename'],
+      'lastname': userResponse.first['lastname'],
+      'extensionname': userResponse.first['extensionname'],
+      'student_id': userResponse.first['student_id'],
+      'role': userResponse.first['role'],
+      'companies': [{'name': userResponse.first['company_name']}],
+      'platoons': [{'name': userResponse.first['platoon_name']}],
+    };
+
+    final userId = userResponse.first['id'];
+
+    // Check if user already has attendance today (no join needed - keep as is)
+    final today = DateTime.now();
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    final existingAttendance = await _supabase
+        .from('attendance')
+        .select('id, status')
+        .eq('user_id', userId)
+        .gte('created_at', startOfDay.toIso8601String())
+        .lt('created_at', endOfDay.toIso8601String());
+
+    if (existingAttendance.isNotEmpty) {
+      _showWarningDialog(transformedUser, 'Attendance already recorded today', existingAttendance.first['status']);
+      return;
+    }
+
+    // Determine attendance status based on cutoff time
+    final checkInTime = DateTime.now();
+    final status = _determineAttendanceStatus(checkInTime);
+
+    await _supabase.from('attendance').insert({
+      'user_id': userId,
+      'status': status,
+      'scanned_by': _supabase.auth.currentUser?.id,
+      'created_at': checkInTime.toIso8601String(),
+      'entry_method': 'manual',
     });
 
-    try {
-      // Find user by student ID
-      final userResponse = await _supabase
-          .from('users')
-          .select('''
-            id, firstname, middlename, lastname, extensionname,
-            student_id, role,
-            companies!inner(name),
-            platoons!inner(name)
-          ''')
-          .eq('student_id', studentId.trim())
-          .single();
+    // Show success dialog
+    _showSuccessDialog(transformedUser, status, checkInTime);
 
-      if (userResponse.isEmpty) {
-        _showErrorSnackBar('Student ID not found');
-        return;
-      }
-
-      final userId = userResponse['id'];
-
-      // Check if user already has attendance today
-      final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-      final endOfDay = startOfDay.add(const Duration(days: 1));
-
-      final existingAttendance = await _supabase
-          .from('attendance')
-          .select('id, status')
-          .eq('user_id', userId)
-          .gte('created_at', startOfDay.toIso8601String())
-          .lt('created_at', endOfDay.toIso8601String());
-
-      if (existingAttendance.isNotEmpty) {
-        _showWarningDialog(userResponse, 'Attendance already recorded today', existingAttendance.first['status']);
-        return;
-      }
-
-      // Determine attendance status based on cutoff time
-      final checkInTime = DateTime.now();
-      final status = _determineAttendanceStatus(checkInTime);
-
-      // Record attendance
-      await _supabase.from('attendance').insert({
-        'user_id': userId,
-        'status': status,
-        'scanned_by': _supabase.auth.currentUser?.id,
-        'created_at': checkInTime.toIso8601String(),
-        'entry_method': 'manual',
-      });
-
-      // Show success dialog
-      _showSuccessDialog(userResponse, status, checkInTime);
-
-    } catch (e) {
-      print('Error processing manual entry: $e');
-      _showErrorSnackBar('Student ID not found or error occurred');
-    } finally {
-      setState(() {
-        isProcessingQR = false;
-      });
-    }
+  } catch (e) {
+    print('Error processing manual entry: $e');
+    _showErrorSnackBar('Student ID not found or error occurred');
+  } finally {
+    setState(() {
+      isProcessingQR = false;
+    });
   }
+}
 
   void _toggleFlash() {
     cameraController.toggleTorch();
@@ -648,184 +662,365 @@ void initState() {
       isFlashOn = !isFlashOn;
     });
   }
-
-  void _showSuccessDialog(Map<String, dynamic> userInfo, String status, DateTime checkInTime) {
-    final isLate = status == 'late';
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: Icon(
-          isLate ? Icons.schedule : Icons.check_circle,
-          color: isLate ? const Color(0xFFF59E0B) : const Color(0xFF059669),
-          size: 48,
-        ),
-        title: Text(
-          isLate ? 'Marked as Late' : 'Attendance Recorded',
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${userInfo['firstname']} ${userInfo['lastname']}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
+void _showSuccessDialog(Map<String, dynamic> userInfo, String status, DateTime checkInTime) {
+  final isLate = status == 'late';
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.white,
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      contentPadding: const EdgeInsets.all(24),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Success/Late Icon with background
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isLate 
+                ? const Color(0xFFFEF3C7) 
+                : const Color(0xFFDCFCE7),
             ),
-            const SizedBox(height: 8),
-            Text(
-              userInfo['student_id'],
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF6B7280),
-              ),
-              textAlign: TextAlign.center,
+            child: Icon(
+              isLate ? Icons.schedule_outlined : Icons.check_circle_outline,
+              color: isLate ? const Color(0xFFF59E0B) : const Color(0xFF059669),
+              size: 40,
             ),
-            Text(
-              '${userInfo['role']} - ${userInfo['platoons']?['name'] ?? 'No Platoon'}',
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF6B7280),
-              ),
-              textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Title
+          Text(
+            isLate ? 'Marked as Late' : 'Attendance Recorded',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1F2937),
             ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isLate ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7),
-                borderRadius: BorderRadius.circular(8),
+            textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // User Info Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE5E7EB),
+                width: 1,
               ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.access_time,
-                        color: isLate ? const Color(0xFFF59E0B) : const Color(0xFF059669),
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Recorded at ${checkInTime.toString().substring(11, 16)}',
-                        style: TextStyle(
-                          color: isLate ? const Color(0xFFF59E0B) : const Color(0xFF059669),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+            ),
+            child: Column(
+              children: [
+                // Name
+                Text(
+                  '${userInfo['firstname']} ${userInfo['lastname']}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
                   ),
-                  if (isLate) ...[
-                    const SizedBox(height: 4),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Student ID
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF374151),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    userInfo['student_id'],
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Role and Platoon
+                Text(
+                  '${userInfo['role']} - ${userInfo['platoons']?['name'] ?? 'No Platoon'}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Time Info
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isLate ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.access_time_rounded,
+                      color: isLate ? const Color(0xFFF59E0B) : const Color(0xFF059669),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      'Cutoff time: ${_formatTime(cutoffTime)}',
-                      style: const TextStyle(
-                        color: Color(0xFF6B7280),
-                        fontSize: 11,
+                      'Recorded at ${checkInTime.toString().substring(11, 16)}',
+                      style: TextStyle(
+                        color: isLate ? const Color(0xFFF59E0B) : const Color(0xFF059669),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
+                ),
+                if (isLate) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Cutoff time: ${_formatTime(cutoffTime)}',
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isLate ? const Color(0xFFF59E0B) : const Color(0xFF059669),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Continue Scanning'),
           ),
-        ],
-      ),
-    );
-  }
-
-  void _showWarningDialog(Map<String, dynamic> userInfo, String message, String existingStatus) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(
-          Icons.warning,
-          color: Color(0xFFF59E0B),
-          size: 48,
-        ),
-        title: const Text(
-          'Already Recorded',
-          textAlign: TextAlign.center,
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${userInfo['firstname']} ${userInfo['lastname']}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+          
+          const SizedBox(height: 24),
+          
+          // Action Button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isLate ? const Color(0xFFF59E0B) : const Color(0xFF059669),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              userInfo['student_id'],
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF6B7280),
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              style: const TextStyle(
-                color: Color(0xFFF59E0B),
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: existingStatus == 'late' 
-                    ? const Color(0xFFFEF3C7)
-                    : const Color(0xFFDCFCE7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'Current Status: ${existingStatus.toUpperCase()}',
+              child: const Text(
+                'Continue Scanning',
                 style: TextStyle(
-                  color: existingStatus == 'late' 
-                      ? const Color(0xFFF59E0B)
-                      : const Color(0xFF059669),
-                  fontSize: 12,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF59E0B),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('OK'),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
+
+void _showWarningDialog(Map<String, dynamic> userInfo, String message, String existingStatus) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.white,
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      contentPadding: const EdgeInsets.all(24),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Warning Icon with background
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFFEF3C7),
+            ),
+            child: const Icon(
+              Icons.warning_amber_outlined,
+              color: Color(0xFFF59E0B),
+              size: 40,
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Title
+          const Text(
+            'Already Recorded',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1F2937),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // User Info Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE5E7EB),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                // Name
+                Text(
+                  '${userInfo['firstname']} ${userInfo['lastname']}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Student ID
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF374151),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    userInfo['student_id'],
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Warning Message
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFF59E0B).withOpacity(0.2),
+                width: 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: Color(0xFFF59E0B),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Current Status Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: existingStatus == 'late' 
+                        ? const Color(0xFFF59E0B)
+                        : const Color(0xFF059669),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Status: ${existingStatus.toUpperCase()}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 24),
+          
+          // Action Button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Got It',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
 
   void _showErrorSnackBar(String message) {
     if (mounted) {

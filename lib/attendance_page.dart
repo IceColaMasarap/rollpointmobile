@@ -31,14 +31,12 @@ class _AttendancePageState extends State<AttendancePage> {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      // Load attendance records
       final response = await _supabase
           .from('attendance')
           .select('status, created_at')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
 
-      // Calculate stats
       int presentCount = 0;
       int lateCount = 0;
       int absentCount = 0;

@@ -71,11 +71,10 @@ Future<void> _handleRegister() async {
     );
 
     if (response.user != null) {
-      // ✅ Insert into users table
       await _supabase.from('users').insert({
-        'id': response.user!.id,          // same as auth UID
-        'email': response.user!.email,    // store email
-        'is_configured': false,           // default until profile setup
+        'id': response.user!.id,        
+        'email': response.user!.email,   
+        'is_configured': false,          
       });
 
       setState(() {

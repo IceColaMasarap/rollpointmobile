@@ -42,53 +42,68 @@ class _InstructorPageState extends State<InstructorPage> {
   }
 
   Future<void> _loadUserData() async {
-    try {
-      setState(() {
-        isLoading = true;
-      });
+  try {
+    setState(() {
+      isLoading = true;
+    });
 
-      // Get current user info
-      final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return;
-
-      // Fetch user details
-      final userResponse = await _supabase
-          .from('users')
-          .select('firstname, lastname, student_id, rank_id, ranks(name)')
-          .eq('id', userId)
-          .single();
-
-      // Fetch user's assignments with company and platoon info
-      final assignmentsResponse = await _supabase
-          .from('instructor_assignments')
-          .select('''
-            id, company_id, platoon_id,
-            companies(id, name),
-            platoons(id, name)
-          ''')
-          .eq('instructor_id', userId);
-
-      setState(() {
-        currentUser = userResponse;
-        userAssignments = List<Map<String, dynamic>>.from(assignmentsResponse);
-      });
-
-      // Load the previously selected assignment or set first as default
-      await _loadSelectedAssignment();
-
-      // Load attendance data for selected assignment
-      if (selectedAssignment != null) {
-        await _loadAttendanceData();
-      }
-
-    } catch (e) {
-      print('Error loading user data: $e');
-    } finally {
-      setState(() {
-        isLoading = false;
-      });
+    // Get current user info
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      print('No user ID found');
+      return;
     }
+
+    print('Fetching user details for user: $userId');
+    // Fetch user details using stored procedure
+    final userResponse = await _supabase
+        .rpc('get_user_with_rank', params: {'user_uuid': userId});
+
+    // Debug: Print the user response
+    print('User details fetched: $userResponse');
+
+    // Fetch user's assignments using stored procedure
+    final assignmentsResponse = await _supabase
+        .rpc('get_instructor_assignments', params: {'instructor_uuid': userId});
+
+    // Debug: Print the assignments response
+    print('Instructor assignments fetched: $assignmentsResponse');
+
+    // Transform the assignments response to match expected structure
+    final transformedAssignments = assignmentsResponse.map<Map<String, dynamic>>((assignment) => {
+      'id': assignment['id'],
+      'company_id': assignment['company_id'],
+      'platoon_id': assignment['platoon_id'],
+      'companies': {'id': assignment['company_id'], 'name': assignment['company_name']},
+      'platoons': {'id': assignment['platoon_id'], 'name': assignment['platoon_name']},
+    }).toList();
+
+    setState(() {
+      currentUser = userResponse.isNotEmpty ? userResponse.first : null;
+      userAssignments = transformedAssignments;
+    });
+
+    // Load the previously selected assignment or set first as default
+    await _loadSelectedAssignment();
+
+    // Debug: Print selected assignment
+    print('Selected assignment: $selectedAssignment');
+
+    // Load attendance data for selected assignment
+    if (selectedAssignment != null) {
+      await _loadAttendanceData();
+    }
+
+  } catch (e) {
+    print('Error loading user data: $e');
+  } finally {
+    setState(() {
+      isLoading = false;
+    });
   }
+}
+
+
 Future<void> _loadSelectedAssignment() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -141,71 +156,100 @@ Future<void> _loadSelectedAssignment() async {
 
 
   Future<void> _loadAttendanceData() async {
-    if (selectedAssignment == null) return;
-
-    try {
-      final companyId = selectedAssignment!['company_id'];
-      final platoonId = selectedAssignment!['platoon_id'];
-
-      // Get total students in this company-platoon
-      final studentsResponse = await _supabase
-          .from('users')
-          .select('id')
-          .eq('role', 'Student')
-          .eq('company_id', companyId)
-          .eq('platoon_id', platoonId)
-          .neq('status', 'archived');
-
-      final totalStudents = studentsResponse.length;
-
-      // Get today's attendance for these students
-      final today = DateTime.now();
-      final startOfDay = DateTime(today.year, today.month, today.day);
-      final endOfDay = startOfDay.add(const Duration(days: 1));
-
-      // First, get all student IDs for this company-platoon
-      final studentIds = studentsResponse.map((student) => student['id']).toList();
-
-      // Then get today's attendance for these specific students
-      final attendanceResponse = await _supabase
-          .from('attendance')
-          .select('user_id, status')
-          .inFilter('user_id', studentIds)
-          .gte('created_at', startOfDay.toIso8601String())
-          .lt('created_at', endOfDay.toIso8601String());
-
-      final presentToday = attendanceResponse.where((record) => 
-          record['status'] == 'present').length;
-      final absentToday = totalStudents - presentToday;
-      final attendanceRate = totalStudents > 0 
-          ? (presentToday / totalStudents * 100) 
-          : 0.0;
-
-      // Get recent activity for this company-platoon
-      final recentActivityResponse = await _supabase
-          .from('attendance')
-          .select('''
-            status, created_at, user_id,
-            users!attendance_user_id_fkey(firstname, lastname, student_id)
-          ''')
-          .inFilter('user_id', studentIds)
-          .order('created_at', ascending: false)
-          .limit(10);
-
-      setState(() {
-        attendanceStats = {
-          'totalStudents': totalStudents,
-          'presentToday': presentToday,
-          'absentToday': absentToday,
-          'attendanceRate': attendanceRate,
-        };
-        recentActivity = List<Map<String, dynamic>>.from(recentActivityResponse);
-      });
-
-    } catch (e) {
-      print('Error loading attendance data: $e');
-    }
+  if (selectedAssignment == null) {
+    print('No selected assignment found');
+    return;
   }
+
+  try {
+    final companyId = selectedAssignment!['company_id'];
+    final platoonId = selectedAssignment!['platoon_id'];
+
+    // Debug: Log selected assignment details
+    print('Fetching attendance data for company: $companyId, platoon: $platoonId');
+
+    // Get total students in this company-platoon (no join needed - keep as is)
+    final studentsResponse = await _supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'Student')
+        .eq('company_id', companyId)
+        .eq('platoon_id', platoonId)
+        .neq('status', 'archived');
+
+    // Debug: Log students response
+    print('Students fetched: $studentsResponse');
+
+    final totalStudents = studentsResponse.length;
+
+    // Get today's attendance for these students (no join needed - keep as is)
+    final today = DateTime.now();
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+
+    // Get student IDs
+    final studentIds = studentsResponse.map((student) => student['id'].toString()).toList();
+
+    // Debug: Log student IDs
+    print('Student IDs for attendance: $studentIds');
+
+    // Get today's attendance (no join needed - keep as is)
+    final attendanceResponse = await _supabase
+        .from('attendance')
+        .select('user_id, status')
+        .inFilter('user_id', studentIds)
+        .gte('created_at', startOfDay.toIso8601String())
+        .lt('created_at', endOfDay.toIso8601String());
+
+    // Debug: Log today's attendance response
+    print('Attendance fetched for today: $attendanceResponse');
+
+    final presentToday = attendanceResponse.where((record) => 
+        record['status'] == 'present').length;
+    final absentToday = totalStudents - presentToday;
+    final attendanceRate = totalStudents > 0 
+        ? (presentToday / totalStudents * 100) 
+        : 0.0;
+
+    // Get recent activity using stored procedure
+    print('Fetching recent attendance activity...');
+    final recentActivityResponse = await _supabase
+        .rpc('get_recent_attendance_activity', params: {
+          'student_ids': studentIds,
+          'activity_limit': 10
+        });
+
+    // Debug: Log recent activity response
+    print('Recent activity fetched: $recentActivityResponse');
+
+    // Transform the response to match expected structure
+    final transformedActivity = recentActivityResponse.map<Map<String, dynamic>>((activity) => {
+      'status': activity['status'],
+      'created_at': activity['created_at'],
+      'user_id': activity['user_id'],
+      'users': {
+        'firstname': activity['user_firstname'],
+        'lastname': activity['user_lastname'],
+        'student_id': activity['user_student_id'],
+      }
+    }).toList();
+
+    setState(() {
+      attendanceStats = {
+        'totalStudents': totalStudents,
+        'presentToday': presentToday,
+        'absentToday': absentToday,
+        'attendanceRate': attendanceRate,
+      };
+      recentActivity = transformedActivity;
+    });
+
+  } catch (e) {
+    print('Error loading attendance data: $e');
+  }
+}
+
+
 
   void _onAssignmentSelected(Map<String, dynamic> assignment) {
     setState(() {
