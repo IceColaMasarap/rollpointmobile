@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'login_page.dart'; // make sure path is correct
 import 'auth_utils.dart'; // Import the new utility class
-import 'edit_address_page.dart'; // Add this import
+import 'edit_address_page.dart'; // Add this importsss
 
 class InstructorSettingsPage extends StatefulWidget {
   const InstructorSettingsPage({super.key});
