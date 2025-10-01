@@ -89,126 +89,128 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Session Settings Panel
-            if (isTimeSettingsVisible) _buildSessionSettingsPanel(),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Session Settings Panel
+              if (isTimeSettingsVisible) _buildSessionSettingsPanel(),
 
-            // Session Status Banner
-            _buildSessionStatusBanner(),
+              // Session Status Banner
+              _buildSessionStatusBanner(),
 
-            // Camera Preview Area
-            Expanded(
-              flex: 3,
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Stack(
-                    children: [
-                      // Show scanner only if session is active
-                      if (isSessionActive)
-                        MobileScanner(
-                          controller: cameraController,
-                          onDetect: (BarcodeCapture capture) {
-                            if (!isProcessingQR && capture.barcodes.isNotEmpty) {
-                              // Check cooldown
-                              if (lastScanTime != null &&
-                                  DateTime.now().difference(lastScanTime!).inSeconds < 2) {
-                                return;
+              // Camera Preview Area
+              SizedBox(
+                height: 350,
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Stack(
+                      children: [
+                        // Show scanner only if session is active
+                        if (isSessionActive)
+                          MobileScanner(
+                            controller: cameraController,
+                            onDetect: (BarcodeCapture capture) {
+                              if (!isProcessingQR && capture.barcodes.isNotEmpty) {
+                                // Check cooldown
+                                if (lastScanTime != null &&
+                                    DateTime.now().difference(lastScanTime!).inSeconds < 2) {
+                                  return;
+                                }
+                                final String? code = capture.barcodes.first.rawValue;
+                                _processQRCode(code);
                               }
-                              final String? code = capture.barcodes.first.rawValue;
-                              _processQRCode(code);
-                            }
-                          },
-                        )
-                      else
-                        Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.lock_clock,
-                                color: Colors.white.withOpacity(0.5),
-                                size: 64,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Scanner Disabled',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.8),
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Start a session to begin scanning',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.6),
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      
-                      // Scanner overlay
-                      if (isSessionActive)
-                        Center(
-                          child: Container(
-                            width: 250,
-                            height: 250,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: const Color(0xFF059669),
-                                width: 6,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                        ),
-                      
-                      // Processing indicator
-                      if (isProcessingQR)
-                        Container(
-                          color: Colors.black54,
-                          child: const Center(
+                            },
+                          )
+                        else
+                          Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                CircularProgressIndicator(
-                                  color: Color(0xFF059669),
+                                Icon(
+                                  Icons.lock_clock,
+                                  color: Colors.white.withOpacity(0.5),
+                                  size: 64,
                                 ),
-                                SizedBox(height: 16),
+                                const SizedBox(height: 16),
                                 Text(
-                                  'Processing QR Code...',
+                                  'Scanner Disabled',
                                   style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
+                                    color: Colors.white.withOpacity(0.8),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Start a session to begin scanning',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontSize: 14,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                    ],
+                      
+                        // Scanner overlay
+                        if (isSessionActive)
+                          Center(
+                            child: Container(
+                              width: 250,
+                              height: 250,
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: const Color(0xFF059669),
+                                  width: 6,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                          ),
+                      
+                        // Processing indicator
+                        if (isProcessingQR)
+                          Container(
+                            color: Colors.black54,
+                            child: const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    color: Color(0xFF059669),
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'Processing QR Code...',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
 
-            // Instructions
-            _buildInstructions(),
+              // Instructions
+              _buildInstructions(),
 
-            // Bottom Actions
-            _buildBottomActions(),
-          ],
+              // Bottom Actions
+              _buildBottomActions(),
+            ],
+          ),
         ),
       ),
     );
