@@ -66,29 +66,18 @@ Future<void> _handleRegister() async {
 
   try {
     final response = await _supabase.auth.signUp(
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-    );
+  email: _emailController.text.trim(),
+  password: _passwordController.text.trim(),
+);
 
-    if (response.user != null) {
-      await _supabase.from('users').insert({
-        'id': response.user!.id,        
-        'email': response.user!.email,   
-        'is_configured': false,          
-      });
+if (response.user != null) {
+  setState(() {
+    _successMessage =
+        "Account created successfully! Please check your email for verification.";
+  });
+  _showVerificationModal();
+}
 
-      setState(() {
-        _successMessage =
-            "Account created successfully! Please check your email for verification.";
-      });
-      _showVerificationModal();
-    } else if (response.session == null) {
-      setState(() {
-        _successMessage =
-            "Account created! Please check your email for verification.";
-      });
-      _showVerificationModal();
-    }
   } on AuthException catch (authError) {
     setState(() {
       if (authError.message.toLowerCase().contains('email')) {

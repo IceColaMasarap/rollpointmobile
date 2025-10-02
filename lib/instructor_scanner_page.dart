@@ -833,7 +833,6 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
 
       final userId = qrResponse.first['user_id'];
 
-      // Get user information
       final userResponse = await _supabase
           .rpc('get_user_with_company_platoon_by_id', params: {'user_uuid': userId});
 
@@ -1075,7 +1074,7 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
                   const SizedBox(height: 12),
                   
                   Text(
-                    '${userInfo['role']} - ${userInfo['platoons'][0]['name']}',
+                    '${userInfo['companies'][0]['name']} - ${userInfo['platoons'][0]['name']}',
                     style: const TextStyle(
                       fontSize: 14,
                       color: Color(0xFF6B7280),

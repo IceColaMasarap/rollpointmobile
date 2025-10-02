@@ -115,43 +115,41 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     super.initState();
     _loadDataFromDatabase();
     _fetchRegions();
-    
   }
 
   Future<void> _loadDataFromDatabase() async {
-  try {
-    setState(() => _isLoading = true);
+    try {
+      setState(() => _isLoading = true);
 
-    final schoolsResponse = await _supabase
-        .from('schools')
-        .select('id, name')
-        .order('name');
+      final schoolsResponse = await _supabase
+          .from('schools')
+          .select('id, name')
+          .order('name');
 
-    final companiesResponse = await _supabase
-        .from('companies')
-        .select('id, name')
-        .order('name');
+      final companiesResponse = await _supabase
+          .from('companies')
+          .select('id, name')
+          .order('name');
 
-    // Modified to include company_id
-    final platoonsResponse = await _supabase
-        .from('platoons')
-        .select('id, name, company_id')
-        .order('name');
+      // Modified to include company_id
+      final platoonsResponse = await _supabase
+          .from('platoons')
+          .select('id, name, company_id')
+          .order('name');
 
-    setState(() {
-      _schools = List<Map<String, dynamic>>.from(schoolsResponse);
-      _companies = List<Map<String, dynamic>>.from(companiesResponse);
-      _platoons = List<Map<String, dynamic>>.from(platoonsResponse);
-    });
-  } catch (error) {
-    setState(() {
-      _errorMessage = 'Failed to load data: $error';
-    });
-  } finally {
-    setState(() => _isLoading = false);
+      setState(() {
+        _schools = List<Map<String, dynamic>>.from(schoolsResponse);
+        _companies = List<Map<String, dynamic>>.from(companiesResponse);
+        _platoons = List<Map<String, dynamic>>.from(platoonsResponse);
+      });
+    } catch (error) {
+      setState(() {
+        _errorMessage = 'Failed to load data: $error';
+      });
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
-}
-
 
   // ---------------- PSGC FETCHERS ----------------
 
@@ -402,20 +400,20 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   }
 
   List<Map<String, dynamic>> _getFilteredCompanies() {
-  return _companies;
-}
+    return _companies;
+  }
 
-List<Map<String, dynamic>> _getFilteredPlatoons() {
-  if (_selectedCompany == null) return [];
-  
-  final selectedCompanyData = _companies.firstWhere(
-    (company) => company['name'] == _selectedCompany,
-  );
-  
-  return _platoons.where((platoon) => 
-    platoon['company_id'] == selectedCompanyData['id']
-  ).toList();
-}
+  List<Map<String, dynamic>> _getFilteredPlatoons() {
+    if (_selectedCompany == null) return [];
+
+    final selectedCompanyData = _companies.firstWhere(
+      (company) => company['name'] == _selectedCompany,
+    );
+
+    return _platoons
+        .where((platoon) => platoon['company_id'] == selectedCompanyData['id'])
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -935,37 +933,37 @@ List<Map<String, dynamic>> _getFilteredPlatoons() {
             // ),
             // const SizedBox(height: 15),
             _buildDropdown(
-  value: _selectedCompany,
-  items: _getFilteredCompanies()
-      .map((company) => company['name'] as String)
-      .toList(),
-  hint: "Company *",
-  icon: Icons.group,
-  onChanged: (value) {
-    setState(() {
-      _selectedCompany = value;
-      _selectedPlatoon = null; // Reset platoon when company changes
-    });
-  },
-  required: true,
-),
+              value: _selectedCompany,
+              items: _getFilteredCompanies()
+                  .map((company) => company['name'] as String)
+                  .toList(),
+              hint: "Company *",
+              icon: Icons.group,
+              onChanged: (value) {
+                setState(() {
+                  _selectedCompany = value;
+                  _selectedPlatoon = null; // Reset platoon when company changes
+                });
+              },
+              required: true,
+            ),
 
             const SizedBox(height: 15),
             _buildDropdown(
-  value: _selectedPlatoon,
-  items: _getFilteredPlatoons()
-      .map((platoon) => platoon['name'] as String)
-      .toList(),
-  hint: _selectedCompany == null 
-      ? "Select a company first" 
-      : "Platoon *",
-  icon: Icons.groups,
-  onChanged: _selectedCompany == null 
-      ? null 
-      : (value) => setState(() => _selectedPlatoon = value),
-  required: true,
-  enabled: _selectedCompany != null,
-),
+              value: _selectedPlatoon,
+              items: _getFilteredPlatoons()
+                  .map((platoon) => platoon['name'] as String)
+                  .toList(),
+              hint: _selectedCompany == null
+                  ? "Select a company first"
+                  : "Platoon *",
+              icon: Icons.groups,
+              onChanged: _selectedCompany == null
+                  ? null
+                  : (value) => setState(() => _selectedPlatoon = value),
+              required: true,
+              enabled: _selectedCompany != null,
+            ),
           ],
         ),
       ),
@@ -1230,21 +1228,17 @@ List<Map<String, dynamic>> _getFilteredPlatoons() {
       );
 
       // Update users table with profile data (saving address names)
-   // First, insert the address and use the user's ID as the address ID
-await _supabase
-    .from('addresses')
-    .upsert({
-      'id': user.id, // Use user ID as address ID
-      'region': _selectedRegionName,
-      'province': _selectedProvinceName, // may be null for NCR, etc.
-      'city': _selectedCityName,
-      'barangay': _selectedBarangayName,
-      // Add street if you have that field in your form
-      // 'street': _streetController.text.trim().isEmpty ? null : _streetController.text.trim(),
-    });
+      // First, insert the address and use the user's ID as the address ID
+      await _supabase.from('addresses').upsert({
+        'id': user.id, // This is already a string UUID from auth
+        'region': _selectedRegionName,
+        'province': _selectedProvinceName,
+        'city': _selectedCityName,
+        'barangay': _selectedBarangayName,
+      });
 
-// Then update the user with the address reference
-await _supabase
+      // Then update the user with the address reference
+      await _supabase
     .from('users')
     .update({
       'firstname': _firstNameController.text.trim(),
@@ -1257,13 +1251,13 @@ await _supabase
       'sex': _selectedSex,
       'school_id': selectedSchoolData['id'],
       'student_id': _idNumberController.text.trim(),
-      // 'rank_id': selectedRankData['id'],
       'company_id': selectedCompanyData['id'],
       'platoon_id': selectedPlatoonData['id'],
-      'address_id': user.id, // Reference the address using user ID
+      'address_id': user.id, // This works because both are strings
       'is_configured': true,
     })
     .eq('id', user.id);
+
       if (mounted) {
         Navigator.pushReplacement(
           context,
