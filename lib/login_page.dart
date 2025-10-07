@@ -24,6 +24,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   bool _rememberMe = false;
   String? _errorMessage;
   String? _successMessage;
+  bool _obscurePassword = true;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -42,7 +43,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
-    
+
     // Load saved email if exists (but don't auto-login)
     _loadSavedEmail();
   }
@@ -60,7 +61,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     final prefs = await SharedPreferences.getInstance();
     final savedEmail = prefs.getString('saved_email');
     final rememberMe = prefs.getBool('remember_me') ?? false;
-    
+
     if (savedEmail != null && rememberMe) {
       setState(() {
         _emailController.text = savedEmail;
@@ -140,7 +141,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
         Future.delayed(const Duration(milliseconds: 1200), () {
           if (!mounted) return;
-          
+
           if (!isConfigured) {
             Navigator.pushReplacement(
               context,
@@ -329,7 +330,14 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               label: 'Password',
               hint: 'Enter your password',
               isPassword: true,
+              obscureText: _obscurePassword,
+              onToggleVisibility: () {
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
             ),
+
             const SizedBox(height: 15),
             // Remember Me Checkbox
             Row(
@@ -345,10 +353,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 ),
                 const Text(
                   'Remember me',
-                  style: TextStyle(
-                    color: Color(0xFF374151),
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Color(0xFF374151), fontSize: 14),
                 ),
                 const Spacer(),
                 TextButton(
@@ -410,6 +415,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     required String label,
     required String hint,
     bool isPassword = false,
+    bool? obscureText, // Add this parameter
+    VoidCallback? onToggleVisibility, // Add this parameter
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,7 +432,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
-          obscureText: isPassword,
+          obscureText: obscureText ?? isPassword,
           validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
           decoration: InputDecoration(
             hintText: hint,
@@ -436,6 +443,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             ),
             filled: true,
             fillColor: Colors.white,
+            // Add suffix icon for password toggle
+            suffixIcon: isPassword && onToggleVisibility != null
+                ? IconButton(
+                    icon: Icon(
+                      obscureText ?? true
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: const Color(0xFF6b7280),
+                    ),
+                    onPressed: onToggleVisibility,
+                  )
+                : null,
           ),
         ),
       ],

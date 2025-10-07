@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'widgets/camouflage_background.dart';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -14,8 +16,14 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
   final _emailFormKey = GlobalKey<FormState>();
   final _resetFormKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final List<TextEditingController> _codeControllers = List.generate(6, (index) => TextEditingController());
-  final List<FocusNode> _codeFocusNodes = List.generate(6, (index) => FocusNode());
+  final List<TextEditingController> _codeControllers = List.generate(
+    6,
+    (index) => TextEditingController(),
+  );
+  final List<FocusNode> _codeFocusNodes = List.generate(
+    6,
+    (index) => FocusNode(),
+  );
   final _newPasswordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -23,6 +31,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
   String? _errorMessage;
   String? _successMessage;
   int _currentStep = 0; // 0: email, 1: verification code, 2: new password
+  bool _showNewPassword = false;
+  bool _showConfirmPassword = false;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -142,42 +152,58 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
   }
 
   Future<void> _updatePassword() async {
-    if (!_resetFormKey.currentState!.validate()) return;
+  if (!_resetFormKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-      _successMessage = null;
-    });
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+    _successMessage = null;
+  });
 
-    try {
-      await _supabase.auth.updateUser(
-        UserAttributes(
-          password: _newPasswordController.text.trim(),
-        ),
-      );
+  try {
+    // Update password through Supabase Auth
+    await _supabase.auth.updateUser(
+      UserAttributes(
+        password: _newPasswordController.text.trim(),
+      ),
+    );
 
-      setState(() {
-        _successMessage = 'Password reset successfully!';
-      });
+    // Get current user
+    final user = _supabase.auth.currentUser;
+    if (user != null) {
+      // Hash the password before saving to password_history
+      final plainPassword = _newPasswordController.text.trim();
+      final passwordBytes = utf8.encode(plainPassword);
+      final passwordHash = sha256.convert(passwordBytes).toString();
 
-      Future.delayed(const Duration(seconds: 2), () {
-        Navigator.pop(context);
-      });
-    } on AuthException catch (authError) {
-      setState(() {
-        _errorMessage = authError.message;
-      });
-    } catch (error) {
-      setState(() {
-        _errorMessage = 'Failed to reset password. Please try again.';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
+      await _supabase.from('password_history').insert({
+        'user_id': user.id,
+        'password_hash': passwordHash,
       });
     }
+
+    setState(() {
+      _successMessage = 'Password reset successfully!';
+    });
+
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.pop(context);
+    });
+  } on AuthException catch (authError) {
+    setState(() {
+      _errorMessage = authError.message;
+    });
+  } catch (error) {
+    setState(() {
+      _errorMessage = 'Failed to reset password. Please try again.';
+    });
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -264,8 +290,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
                 _currentStep == 0
                     ? Icons.lock_outline
                     : _currentStep == 1
-                        ? Icons.email_outlined
-                        : Icons.password_outlined,
+                    ? Icons.email_outlined
+                    : Icons.password_outlined,
                 size: compact ? 60 : 80,
                 color: Colors.white,
               ),
@@ -331,7 +357,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
           if (_errorMessage != null)
             _buildMessage(_errorMessage!, Colors.red, const Color(0xFFfef2f2)),
           if (_successMessage != null)
-            _buildMessage(_successMessage!, Colors.green, const Color(0xFFf0fdf4)),
+            _buildMessage(
+              _successMessage!,
+              Colors.green,
+              const Color(0xFFf0fdf4),
+            ),
           _buildCurrentStepForm(),
         ],
       ),
@@ -419,6 +449,18 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
             label: 'New Password',
             hint: 'Enter new password',
             isPassword: true,
+            obscureText: !_showNewPassword,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _showNewPassword ? Icons.visibility_off : Icons.visibility,
+                color: const Color(0xFF6b7280),
+              ),
+              onPressed: () {
+                setState(() {
+                  _showNewPassword = !_showNewPassword;
+                });
+              },
+            ),
           ),
           const SizedBox(height: 20),
           _buildTextField(
@@ -426,6 +468,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
             label: 'Confirm Password',
             hint: 'Confirm new password',
             isPassword: true,
+            obscureText: !_showConfirmPassword,
             validator: (value) {
               if (value?.isEmpty ?? true) return 'Required';
               if (value != _newPasswordController.text) {
@@ -433,7 +476,19 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
               }
               return null;
             },
+            suffixIcon: IconButton(
+              icon: Icon(
+                _showConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                color: const Color(0xFF6b7280),
+              ),
+              onPressed: () {
+                setState(() {
+                  _showConfirmPassword = !_showConfirmPassword;
+                });
+              },
+            ),
           ),
+
           const SizedBox(height: 25),
           _buildButton(
             text: 'Save New Password',
@@ -491,6 +546,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
     required String label,
     required String hint,
     bool isPassword = false,
+    bool obscureText = false,
+    Widget? suffixIcon,
     TextInputType keyboardType = TextInputType.text,
     String? Function(String?)? validator,
   }) {
@@ -508,9 +565,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
-          obscureText: isPassword,
+          obscureText: obscureText,
           keyboardType: keyboardType,
-          validator: validator ?? (value) => value?.isEmpty ?? true ? 'Required' : null,
+          validator:
+              validator ??
+              (value) => value?.isEmpty ?? true ? 'Required' : null,
           decoration: InputDecoration(
             hintText: hint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -520,6 +579,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
             ),
             filled: true,
             fillColor: Colors.white,
+            suffixIcon: suffixIcon,
           ),
         ),
       ],

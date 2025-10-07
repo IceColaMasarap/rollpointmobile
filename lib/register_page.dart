@@ -9,7 +9,7 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> 
+class _RegisterPageState extends State<RegisterPage>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
@@ -23,7 +23,8 @@ class _RegisterPageState extends State<RegisterPage>
   String? _errorMessage;
   String? _successMessage;
   bool _agreeTerms = false;
-
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -49,60 +50,58 @@ class _RegisterPageState extends State<RegisterPage>
     super.dispose();
   }
 
-Future<void> _handleRegister() async {
-  if (!_formKey.currentState!.validate()) return;
-  if (!_agreeTerms) {
+  Future<void> _handleRegister() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (!_agreeTerms) {
+      setState(() {
+        _errorMessage = "You must agree to the Terms and Conditions";
+      });
+      return;
+    }
+
     setState(() {
-      _errorMessage = "You must agree to the Terms and Conditions";
+      _isLoading = true;
+      _errorMessage = null;
+      _successMessage = null;
     });
-    return;
-  }
 
-  setState(() {
-    _isLoading = true;
-    _errorMessage = null;
-    _successMessage = null;
-  });
+    try {
+      final response = await _supabase.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
-  try {
-    final response = await _supabase.auth.signUp(
-  email: _emailController.text.trim(),
-  password: _passwordController.text.trim(),
-);
-
-if (response.user != null) {
-  setState(() {
-    _successMessage =
-        "Account created successfully! Please check your email for verification.";
-  });
-  _showVerificationModal();
-}
-
-  } on AuthException catch (authError) {
-    setState(() {
-      if (authError.message.toLowerCase().contains('email')) {
-        _errorMessage =
-            "Registration failed: This email is already registered or invalid";
-      } else if (authError.message.toLowerCase().contains('password')) {
-        _errorMessage =
-            "Registration failed: Password does not meet requirements";
-      } else {
-        _errorMessage = "Registration failed: ${authError.message}";
+      if (response.user != null) {
+        setState(() {
+          _successMessage =
+              "Account created successfully! Please check your email for verification.";
+        });
+        _showVerificationModal();
       }
-    });
-  } catch (error) {
-    setState(() {
-      _errorMessage =
-          "Registration failed: An unexpected error occurred. Please try again.";
-    });
-    print("Registration error: $error");
-  } finally {
-    setState(() {
-      _isLoading = false;
-    });
+    } on AuthException catch (authError) {
+      setState(() {
+        if (authError.message.toLowerCase().contains('email')) {
+          _errorMessage =
+              "Registration failed: This email is already registered or invalid";
+        } else if (authError.message.toLowerCase().contains('password')) {
+          _errorMessage =
+              "Registration failed: Password does not meet requirements";
+        } else {
+          _errorMessage = "Registration failed: ${authError.message}";
+        }
+      });
+    } catch (error) {
+      setState(() {
+        _errorMessage =
+            "Registration failed: An unexpected error occurred. Please try again.";
+      });
+      print("Registration error: $error");
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
-}
-
 
   void _showVerificationModal() {
     showDialog(
@@ -124,10 +123,7 @@ if (response.user != null) {
               const SizedBox(height: 20),
               const Text(
                 'Almost there!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
@@ -139,10 +135,7 @@ if (response.user != null) {
               const Text(
                 'Please confirm your email address before logging in.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -162,10 +155,7 @@ if (response.user != null) {
                   },
                   child: const Text(
                     'Got it!',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -192,22 +182,21 @@ if (response.user != null) {
             child: FadeTransition(
               opacity: _fadeAnimation,
               child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWideScreen = constraints.maxWidth > 768;
-                return Container(
-                  margin: isWideScreen
-                      ? const EdgeInsets.all(20)
-                      : EdgeInsets.zero,
-                  constraints: isWideScreen
-                      ? const BoxConstraints(maxWidth: 1000)
-                      : const BoxConstraints.expand(),
-                  child: isWideScreen
-                      ? _buildWideLayout(isWideScreen)
-                      : _buildNarrowLayout(isWideScreen),
-                );
-              },
-            ),
-
+                builder: (context, constraints) {
+                  final isWideScreen = constraints.maxWidth > 768;
+                  return Container(
+                    margin: isWideScreen
+                        ? const EdgeInsets.all(20)
+                        : EdgeInsets.zero,
+                    constraints: isWideScreen
+                        ? const BoxConstraints(maxWidth: 1000)
+                        : const BoxConstraints.expand(),
+                    child: isWideScreen
+                        ? _buildWideLayout(isWideScreen)
+                        : _buildNarrowLayout(isWideScreen),
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -216,55 +205,54 @@ if (response.user != null) {
   }
 
   Widget _buildWideLayout(bool isWideScreen) {
-  return _cardWrapper(
-    Row(
-      children: [
-        Expanded(child: _buildLeftSide()),
-        Expanded(child: _buildRightSide()),
-      ],
-    ),
-    isWideScreen,
-  );
-}
-
-
-  Widget _buildNarrowLayout(bool isWideScreen) {
-  return _cardWrapper(
-    SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    return _cardWrapper(
+      Row(
         children: [
-          SizedBox(height: 180, child: _buildLeftSide(compact: true)),
-          _buildRightSide(compact: true),
+          Expanded(child: _buildLeftSide()),
+          Expanded(child: _buildRightSide()),
         ],
       ),
-    ),
-    isWideScreen,
-  );
-}
+      isWideScreen,
+    );
+  }
 
+  Widget _buildNarrowLayout(bool isWideScreen) {
+    return _cardWrapper(
+      SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(height: 180, child: _buildLeftSide(compact: true)),
+            _buildRightSide(compact: true),
+          ],
+        ),
+      ),
+      isWideScreen,
+    );
+  }
 
   Widget _cardWrapper(Widget child, bool isWideScreen) {
-  final borderRadius = isWideScreen ? BorderRadius.circular(16) : BorderRadius.zero;
+    final borderRadius = isWideScreen
+        ? BorderRadius.circular(16)
+        : BorderRadius.zero;
 
-  return Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: borderRadius,
-      boxShadow: isWideScreen
-          ? [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 25,
-                offset: const Offset(0, 20),
-              ),
-            ]
-          : [],
-    ),
-    child: ClipRRect(borderRadius: borderRadius, child: child),
-  );
-}
-
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: borderRadius,
+        boxShadow: isWideScreen
+            ? [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 25,
+                  offset: const Offset(0, 20),
+                ),
+              ]
+            : [],
+      ),
+      child: ClipRRect(borderRadius: borderRadius, child: child),
+    );
+  }
 
   Widget _buildLeftSide({bool compact = false}) {
     return CamouflageBackground(
@@ -349,12 +337,20 @@ if (response.user != null) {
                 label: "Password",
                 hint: "Enter your password",
                 isPassword: true,
+                obscureText: _obscurePassword,
+                onToggleVisibility: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
                 validator: (value) {
                   if (value?.isEmpty ?? true) return "Password is required";
                   if (value!.length < 8) {
                     return "Password must be at least 8 characters";
                   }
-                  final passwordRegex = RegExp(r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};:"\\|,.<>/?]).{8,}$');
+                  final passwordRegex = RegExp(
+                    r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};:"\\|,.<>/?]).{8,}$',
+                  );
                   if (!passwordRegex.hasMatch(value)) {
                     return "Password must contain at least one uppercase letter, one number, and one special character";
                   }
@@ -363,14 +359,21 @@ if (response.user != null) {
               ),
               const SizedBox(height: 15),
 
-              // Confirm Password Field
+              // 4. Update the Confirm Password field call (around line 392):
               _buildTextField(
                 controller: _confirmPasswordController,
                 label: "Confirm Password",
                 hint: "Re-enter your password",
                 isPassword: true,
+                obscureText: _obscureConfirmPassword,
+                onToggleVisibility: () {
+                  setState(() {
+                    _obscureConfirmPassword = !_obscureConfirmPassword;
+                  });
+                },
                 validator: (value) {
-                  if (value?.isEmpty ?? true) return "Confirm password is required";
+                  if (value?.isEmpty ?? true)
+                    return "Confirm password is required";
                   if (value != _passwordController.text) {
                     return "Passwords do not match";
                   }
@@ -471,6 +474,8 @@ if (response.user != null) {
     required String label,
     required String hint,
     bool isPassword = false,
+    bool? obscureText, // Add this parameter
+    VoidCallback? onToggleVisibility, // Add this parameter
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -487,8 +492,11 @@ if (response.user != null) {
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
-          obscureText: isPassword,
-          validator: validator ?? (value) => value?.isEmpty ?? true ? "Required" : null,
+          obscureText:
+              obscureText ?? isPassword, // Use the parameter if provided
+          validator:
+              validator ??
+              (value) => value?.isEmpty ?? true ? "Required" : null,
           decoration: InputDecoration(
             hintText: hint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -498,6 +506,18 @@ if (response.user != null) {
             ),
             filled: true,
             fillColor: Colors.white,
+            // Add suffix icon for password toggle
+            suffixIcon: isPassword && onToggleVisibility != null
+                ? IconButton(
+                    icon: Icon(
+                      obscureText ?? true
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      color: const Color(0xFF6b7280),
+                    ),
+                    onPressed: onToggleVisibility,
+                  )
+                : null,
           ),
         ),
       ],
