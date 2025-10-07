@@ -396,32 +396,36 @@ Future<void> _loadSelectedAssignment() async {
                             const SizedBox(height: 16),
                             
                             if (userAssignments.isEmpty)
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF3C7),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFFF59E0B)),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(
-                                      Icons.warning,
-                                      color: Color(0xFFF59E0B),
-                                      size: 20,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'No assignments found. Contact administrator.',
-                                      style: TextStyle(
-                                        color: Color(0xFFF59E0B),
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
+                          Container(
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: const Color(0xFFFEF3C7),
+    borderRadius: BorderRadius.circular(8),
+    border: Border.all(color: const Color(0xFFF59E0B)),
+  ),
+  child: const Row(
+    crossAxisAlignment: CrossAxisAlignment.start, // optional: better for multiline
+    children: [
+      Icon(
+        Icons.warning,
+        color: Color(0xFFF59E0B),
+        size: 20,
+      ),
+      SizedBox(width: 8),
+      Expanded( // ✅ allows text to wrap properly
+        child: Text(
+          'No assignments found. Contact administrator.',
+          style: TextStyle(
+            color: Color(0xFFF59E0B),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    ],
+  ),
+)
+
                             else
                               DropdownButtonFormField<Map<String, dynamic>>(
                                 value: selectedAssignment,
