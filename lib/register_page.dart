@@ -24,6 +24,9 @@ class _RegisterPageState extends State<RegisterPage>
   String? _successMessage;
   bool _agreeTerms = false;
 
+bool _obscurePassword = true;
+bool _obscureConfirmPassword = true;
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -344,39 +347,51 @@ if (response.user != null) {
               const SizedBox(height: 15),
 
               // Password Field
-              _buildTextField(
-                controller: _passwordController,
-                label: "Password",
-                hint: "Enter your password",
-                isPassword: true,
-                validator: (value) {
-                  if (value?.isEmpty ?? true) return "Password is required";
-                  if (value!.length < 8) {
-                    return "Password must be at least 8 characters";
-                  }
-                  final passwordRegex = RegExp(r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};:"\\|,.<>/?]).{8,}$');
-                  if (!passwordRegex.hasMatch(value)) {
-                    return "Password must contain at least one uppercase letter, one number, and one special character";
-                  }
-                  return null;
-                },
-              ),
+_buildTextField(
+  controller: _passwordController,
+  label: "Password",
+  hint: "Enter your password",
+  isPassword: true,
+  obscureText: _obscurePassword,
+  onToggleVisibility: () {
+    setState(() {
+      _obscurePassword = !_obscurePassword;
+    });
+  },
+  validator: (value) {
+    if (value?.isEmpty ?? true) return "Password is required";
+    if (value!.length < 8) {
+      return "Password must be at least 8 characters";
+    }
+    final passwordRegex = RegExp(r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};:"\\|,.<>/?]).{8,}$');
+    if (!passwordRegex.hasMatch(value)) {
+      return "Password must contain at least one uppercase letter, one number, and one special character";
+    }
+    return null;
+  },
+),
               const SizedBox(height: 15),
 
               // Confirm Password Field
-              _buildTextField(
-                controller: _confirmPasswordController,
-                label: "Confirm Password",
-                hint: "Re-enter your password",
-                isPassword: true,
-                validator: (value) {
-                  if (value?.isEmpty ?? true) return "Confirm password is required";
-                  if (value != _passwordController.text) {
-                    return "Passwords do not match";
-                  }
-                  return null;
-                },
-              ),
+_buildTextField(
+  controller: _confirmPasswordController,
+  label: "Confirm Password",
+  hint: "Re-enter your password",
+  isPassword: true,
+  obscureText: _obscureConfirmPassword,
+  onToggleVisibility: () {
+    setState(() {
+      _obscureConfirmPassword = !_obscureConfirmPassword;
+    });
+  },
+  validator: (value) {
+    if (value?.isEmpty ?? true) return "Confirm password is required";
+    if (value != _passwordController.text) {
+      return "Passwords do not match";
+    }
+    return null;
+  },
+),
               const SizedBox(height: 20),
 
               // Terms and Conditions
@@ -466,44 +481,55 @@ if (response.user != null) {
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    bool isPassword = false,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF374151),
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
+Widget _buildTextField({
+  required TextEditingController controller,
+  required String label,
+  required String hint,
+  bool isPassword = false,
+  bool obscureText = false,
+  VoidCallback? onToggleVisibility,
+  String? Function(String?)? validator,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF374151),
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
         ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          obscureText: isPassword,
-          validator: validator ?? (value) => value?.isEmpty ?? true ? "Required" : null,
-          decoration: InputDecoration(
-            hintText: hint,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            filled: true,
-            fillColor: Colors.white,
+      ),
+      const SizedBox(height: 6),
+      TextFormField(
+        controller: controller,
+        obscureText: isPassword ? obscureText : false,
+        validator: validator ?? (value) => value?.isEmpty ?? true ? "Required" : null,
+        decoration: InputDecoration(
+          hintText: hint,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
           ),
+          filled: true,
+          fillColor: Colors.white,
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: const Color(0xFF6b7280),
+                    size: 22,
+                  ),
+                  onPressed: onToggleVisibility,
+                )
+              : null,
         ),
-      ],
-    );
-  }
-
+      ),
+    ],
+  );
+}
   Widget _buildMessage(String msg, Color color, Color bg) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),

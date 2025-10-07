@@ -24,7 +24,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   bool _rememberMe = false;
   String? _errorMessage;
   String? _successMessage;
-
+bool _obscurePassword = true;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -324,12 +324,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               hint: 'Enter your email',
             ),
             const SizedBox(height: 20),
-            _buildTextField(
-              controller: _passwordController,
-              label: 'Password',
-              hint: 'Enter your password',
-              isPassword: true,
-            ),
+_buildTextField(
+  controller: _passwordController,
+  label: 'Password',
+  hint: 'Enter your password',
+  isPassword: true,
+  obscureText: _obscurePassword,
+  onToggleVisibility: () {
+    setState(() {
+      _obscurePassword = !_obscurePassword;
+    });
+  },
+),
             const SizedBox(height: 15),
             // Remember Me Checkbox
             Row(
@@ -405,43 +411,54 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    bool isPassword = false,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF374151),
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
+Widget _buildTextField({
+  required TextEditingController controller,
+  required String label,
+  required String hint,
+  bool isPassword = false,
+  bool obscureText = false,
+  VoidCallback? onToggleVisibility,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF374151),
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
         ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          obscureText: isPassword,
-          validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-          decoration: InputDecoration(
-            hintText: hint,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            filled: true,
-            fillColor: Colors.white,
+      ),
+      const SizedBox(height: 6),
+      TextFormField(
+        controller: controller,
+        obscureText: isPassword ? obscureText : false,
+        validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+        decoration: InputDecoration(
+          hintText: hint,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
           ),
+          filled: true,
+          fillColor: Colors.white,
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: const Color(0xFF6b7280),
+                    size: 22,
+                  ),
+                  onPressed: onToggleVisibility,
+                )
+              : null,
         ),
-      ],
-    );
-  }
-
+      ),
+    ],
+  );
+}
   Widget _buildLoginButton() {
     return ElevatedButton(
       onPressed: _isLoading ? null : () => _handleLogin(),

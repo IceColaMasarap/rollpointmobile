@@ -24,6 +24,9 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
   String? _successMessage;
   int _currentStep = 0; // 0: email, 1: verification code, 2: new password
 
+bool _obscureNewPassword = true;
+bool _obscureConfirmPassword = true;
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -414,26 +417,38 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: 30),
-          _buildTextField(
-            controller: _newPasswordController,
-            label: 'New Password',
-            hint: 'Enter new password',
-            isPassword: true,
-          ),
+_buildTextField(
+  controller: _newPasswordController,
+  label: 'New Password',
+  hint: 'Enter new password',
+  isPassword: true,
+  obscureText: _obscureNewPassword,
+  onToggleVisibility: () {
+    setState(() {
+      _obscureNewPassword = !_obscureNewPassword;
+    });
+  },
+),
           const SizedBox(height: 20),
-          _buildTextField(
-            controller: _confirmPasswordController,
-            label: 'Confirm Password',
-            hint: 'Confirm new password',
-            isPassword: true,
-            validator: (value) {
-              if (value?.isEmpty ?? true) return 'Required';
-              if (value != _newPasswordController.text) {
-                return 'Passwords do not match';
-              }
-              return null;
-            },
-          ),
+_buildTextField(
+  controller: _confirmPasswordController,
+  label: 'Confirm Password',
+  hint: 'Confirm new password',
+  isPassword: true,
+  obscureText: _obscureConfirmPassword,
+  onToggleVisibility: () {
+    setState(() {
+      _obscureConfirmPassword = !_obscureConfirmPassword;
+    });
+  },
+  validator: (value) {
+    if (value?.isEmpty ?? true) return 'Required';
+    if (value != _newPasswordController.text) {
+      return 'Passwords do not match';
+    }
+    return null;
+  },
+),
           const SizedBox(height: 25),
           _buildButton(
             text: 'Save New Password',
@@ -486,46 +501,57 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
     );
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    bool isPassword = false,
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF374151),
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
+Widget _buildTextField({
+  required TextEditingController controller,
+  required String label,
+  required String hint,
+  bool isPassword = false,
+  bool obscureText = false,
+  VoidCallback? onToggleVisibility,
+  TextInputType keyboardType = TextInputType.text,
+  String? Function(String?)? validator,
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF374151),
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
         ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          obscureText: isPassword,
-          keyboardType: keyboardType,
-          validator: validator ?? (value) => value?.isEmpty ?? true ? 'Required' : null,
-          decoration: InputDecoration(
-            hintText: hint,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            filled: true,
-            fillColor: Colors.white,
+      ),
+      const SizedBox(height: 6),
+      TextFormField(
+        controller: controller,
+        obscureText: isPassword ? obscureText : false,
+        keyboardType: keyboardType,
+        validator: validator ?? (value) => value?.isEmpty ?? true ? 'Required' : null,
+        decoration: InputDecoration(
+          hintText: hint,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
           ),
+          filled: true,
+          fillColor: Colors.white,
+          suffixIcon: isPassword
+              ? IconButton(
+                  icon: Icon(
+                    obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: const Color(0xFF6b7280),
+                    size: 22,
+                  ),
+                  onPressed: onToggleVisibility,
+                )
+              : null,
         ),
-      ],
-    );
-  }
-
+      ),
+    ],
+  );
+}
   Widget _buildButton({required String text, VoidCallback? onPressed}) {
     return ElevatedButton(
       onPressed: onPressed,
