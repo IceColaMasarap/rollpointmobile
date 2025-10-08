@@ -24,7 +24,7 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
   String? currentSessionId;
   DateTime? sessionStartTime;
   DateTime? sessionEndTime;
-  TimeOfDay cutoffTime = const TimeOfDay(hour: 8, minute: 0);
+TimeOfDay gracePeriod = const TimeOfDay(hour: 0, minute: 15); // 15 minutes default
   bool isSessionActive = false;
   bool isTimeSettingsVisible = false;
 
@@ -55,7 +55,7 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
           sessionEndTime = DateTime.parse(session['end_time']);
           final cutoffTimeStr = session['cutoff_time'] as String;
           final parts = cutoffTimeStr.split(':');
-          cutoffTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+          gracePeriod = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
           isSessionActive = true;
         });
       }
@@ -92,7 +92,6 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // Session Settings Panel
               if (isTimeSettingsVisible) _buildSessionSettingsPanel(),
 
               // Session Status Banner
@@ -390,53 +389,54 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
           
           // Cutoff Time
           const Text(
-            'Late Cutoff Time',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF374151),
+  'Grace Period (Late After)',
+  style: TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    color: Color(0xFF374151),
+  ),
+),
+const SizedBox(height: 8),
+Row(
+  children: [
+    Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.access_time, color: Color(0xFF059669), size: 20),
+            const SizedBox(width: 8),
+            Text(
+              _formatTime(gracePeriod),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF374151),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9FAFB),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.access_time, color: Color(0xFF059669), size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatTime(cutoffTime),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF374151),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              ElevatedButton(
-                onPressed: _selectCutoffTime,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-                child: const Text('Change'),
-              ),
-            ],
-          ),
+          ],
+        ),
+      ),
+    ),
+    const SizedBox(width: 12),
+    ElevatedButton(
+      onPressed: _selectGracePeriod,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF059669),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      ),
+      child: const Text('Change'),
+    ),
+  ],
+),
+
           
           const SizedBox(height: 16),
           
@@ -503,64 +503,73 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
   }
 
   Future<void> _selectSessionTime(bool isStart) async {
-    final DateTime? picked = await showDatePicker(
+  final DateTime? picked = await showDatePicker(
+    context: context,
+    initialDate: DateTime.now(),
+    firstDate: DateTime.now(),
+    lastDate: DateTime.now().add(const Duration(days: 7)),
+  );
+
+  if (picked != null) {
+    final TimeOfDay? timePicked = await showTimePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 7)),
+      initialTime: TimeOfDay.now(),
     );
 
-    if (picked != null) {
-      final TimeOfDay? timePicked = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
+    if (timePicked != null) {
+      final dateTime = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        timePicked.hour,
+        timePicked.minute,
       );
 
-      if (timePicked != null) {
-        final dateTime = DateTime(
-          picked.year,
-          picked.month,
-          picked.day,
-          timePicked.hour,
-          timePicked.minute,
-        );
-
-        setState(() {
-          if (isStart) {
-            sessionStartTime = dateTime;
-          } else {
-            sessionEndTime = dateTime;
-          }
-        });
-      }
-    }
-  }
-
-  Future<void> _selectCutoffTime() async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: cutoffTime,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF059669),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    
-    if (picked != null && picked != cutoffTime) {
       setState(() {
-        cutoffTime = picked;
+        if (isStart) {
+          sessionStartTime = dateTime;
+          // Automatically set grace period to 15 minutes after start time
+          final startMinutes = timePicked.hour * 60 + timePicked.minute;
+          final gracePeriodMinutes = startMinutes + 15;
+          gracePeriod = TimeOfDay(
+            hour: gracePeriodMinutes ~/ 60,
+            minute: gracePeriodMinutes % 60,
+          );
+        } else {
+          sessionEndTime = dateTime;
+        }
       });
     }
   }
+}
+
+
+  Future<void> _selectGracePeriod() async {
+  final TimeOfDay? picked = await showTimePicker(
+    context: context,
+    initialTime: gracePeriod,
+    builder: (context, child) {
+      return Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF059669),
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: Colors.black,
+          ),
+        ),
+        child: child!,
+      );
+    },
+  );
+  
+  if (picked != null && picked != gracePeriod) {
+    setState(() {
+      gracePeriod = picked;
+    });
+  }
+}
+
 
   Future<void> _createOrUpdateSession() async {
     try {
@@ -579,7 +588,7 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
             'session_name': 'Session ${DateTime.now().toString().substring(0, 16)}',
             'start_time': sessionStartTime!.toIso8601String(),
             'end_time': sessionEndTime!.toIso8601String(),
-            'cutoff_time': '${cutoffTime.hour.toString().padLeft(2, '0')}:${cutoffTime.minute.toString().padLeft(2, '0')}:00',
+'cutoff_time': '${gracePeriod.hour.toString().padLeft(2, '0')}:${gracePeriod.minute.toString().padLeft(2, '0')}:00',
             'created_by': _supabase.auth.currentUser!.id,
             'is_active': true,
           })
@@ -644,7 +653,7 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
           if (isSessionActive) ...[
             const SizedBox(height: 8),
             Text(
-              'Cutoff: ${_formatTime(cutoffTime)}',
+              'Cutoff: ${_formatTime(gracePeriod)}',
               style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF6B7280),
@@ -756,16 +765,17 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
   }
 
   String _determineAttendanceStatus(DateTime checkInTime) {
-    final cutoffDateTime = DateTime(
-      checkInTime.year,
-      checkInTime.month,
-      checkInTime.day,
-      cutoffTime.hour,
-      cutoffTime.minute,
-    );
-    
-    return checkInTime.isAfter(cutoffDateTime) ? 'late' : 'present';
-  }
+  final cutoffDateTime = DateTime(
+    checkInTime.year,
+    checkInTime.month,
+    checkInTime.day,
+    gracePeriod.hour,
+    gracePeriod.minute,
+  );
+  
+  return checkInTime.isAfter(cutoffDateTime) ? 'late' : 'present';
+}
+
 
   Future<void> _processQRCode(String? qrData) async {
     if (qrData == null || isProcessingQR || !isSessionActive || currentSessionId == null) return;
@@ -830,7 +840,7 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
         _showErrorSnackBar('QR code not found or inactive');
         return;
       }
-
+      
       final userId = qrResponse.first['user_id'];
 
       final userResponse = await _supabase
@@ -1119,7 +1129,7 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
                   if (isLate) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Cutoff time: ${_formatTime(cutoffTime)}',
+                      'Cutoff time: ${_formatTime(gracePeriod)}',
                       style: const TextStyle(
                         color: Color(0xFF6B7280),
                         fontSize: 12,
@@ -1356,7 +1366,7 @@ class _InstructorScannerPageState extends State<InstructorScannerPage> {
             const Text('Enter student ID manually:'),
             const SizedBox(height: 8),
             Text(
-              'Current cutoff: ${_formatTime(cutoffTime)}',
+              'Current cutoff: ${_formatTime(gracePeriod)}',
               style: const TextStyle(
                 fontSize: 12,
                 color: Color(0xFF6B7280),

@@ -27,6 +27,7 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
   List<Map<String, dynamic>> filteredRecords = [];
   List<Map<String, dynamic>> availableCompanies = [];
   List<Map<String, dynamic>> availablePlatoons = [];
+  List<Map<String, dynamic>> availableSessions = [];
   
   Map<String, dynamic> summaryStats = {
     'totalRecords': 0,
@@ -39,6 +40,8 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
   String selectedCompanyName = 'All Companies';
   int? selectedPlatoonId;
   String selectedPlatoonName = 'All Platoons';
+  String? selectedSessionId;
+  String selectedSessionName = 'All Sessions';
   
   DateTime selectedDate = DateTime.now();
   String searchQuery = '';
@@ -47,7 +50,6 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
   @override
   void initState() {
     super.initState();
-    // Use passed values as defaults if available
     selectedCompanyId = widget.companyId;
     selectedCompanyName = widget.companyName ?? 'All Companies';
     selectedPlatoonId = widget.platoonId;
@@ -58,6 +60,7 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
 
   Future<void> _loadInitialData() async {
     await _loadAvailableCompaniesAndPlatoons();
+    await _loadAvailableSessions();
     await _loadAttendanceData();
   }
 
@@ -66,7 +69,6 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Get instructor's assigned companies and platoons
       final assignmentsResponse = await _supabase
           .from('instructor_assignments')
           .select('''
@@ -76,7 +78,6 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
           ''')
           .eq('instructor_id', userId);
 
-      // Extract unique companies
       final Map<int, Map<String, dynamic>> companiesMap = {};
       final Map<int, Map<String, dynamic>> platoonsMap = {};
 
@@ -106,21 +107,54 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
     }
   }
 
+  Future<void> _loadAvailableSessions() async {
+    try {
+      final startDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      final endDate = startDate.add(const Duration(days: 1));
+
+      final sessionsResponse = await _supabase
+          .from('attendance_sessions')
+          .select('id, session_name, start_time, end_time, cutoff_time')
+          .gte('start_time', startDate.toIso8601String())
+          .lt('start_time', endDate.toIso8601String())
+          .order('start_time', ascending: true);
+
+      setState(() {
+        availableSessions = List<Map<String, dynamic>>.from(sessionsResponse);
+      });
+
+    } catch (e) {
+      print('Error loading sessions: $e');
+    }
+  }
+
+  String _formatTime(String dateTimeString) {
+    final dateTime = DateTime.parse(dateTimeString);
+    final hour = dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour;
+    final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour == 0 ? 12 : hour;
+    return '${displayHour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')} $period';
+  }
+
+  String _getSessionDisplayName(Map<String, dynamic> session) {
+    final startTime = _formatTime(session['start_time']);
+    final endTime = _formatTime(session['end_time']);
+    return '$startTime - $endTime';
+  }
+
   Future<void> _loadAttendanceData() async {
     try {
       setState(() {
         isLoading = true;
       });
 
-      // Get date range for selected date
       final startDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
       final endDate = startDate.add(const Duration(days: 1));
 
-      // First, get all students based on selection
+      // Get all students based on selection
       List<Map<String, dynamic>> allStudents = [];
       
       if (selectedCompanyId != null && selectedPlatoonId != null) {
-        // Specific company and platoon
         final studentsResponse = await _supabase
             .from('users')
             .select('id, firstname, lastname, student_id, company_id, platoon_id')
@@ -132,7 +166,6 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
         allStudents = List<Map<String, dynamic>>.from(studentsResponse);
         
       } else if (selectedCompanyId != null) {
-        // Specific company, all platoons
         final companyPlatoons = availablePlatoons
             .where((p) => p['company_id'] == selectedCompanyId)
             .map((p) => p['id'])
@@ -149,9 +182,18 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
         allStudents = List<Map<String, dynamic>>.from(studentsResponse);
         
       } else {
-        // All companies and platoons (instructor's assignments)
         final allPlatoonIds = availablePlatoons.map((p) => p['id']).toList();
         final allCompanyIds = availableCompanies.map((c) => c['id']).toList();
+        
+        if (allCompanyIds.isEmpty || allPlatoonIds.isEmpty) {
+          setState(() {
+            attendanceRecords = [];
+            filteredRecords = [];
+            summaryStats = {'totalRecords': 0, 'present': 0, 'absent': 0, 'late': 0};
+            isLoading = false;
+          });
+          return;
+        }
         
         final studentsResponse = await _supabase
             .from('users')
@@ -174,20 +216,27 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
         return;
       }
 
-      // Get attendance records for the selected date
+      // Get attendance records with session filter
       final studentIds = allStudents.map((s) => s['id'].toString()).toList();
-      final attendanceResponse = await _supabase
+      
+      var attendanceQuery = _supabase
           .from('attendance')
-          .select('id, status, created_at, user_id')
+          .select('id, status, created_at, user_id, session_id')
           .inFilter('user_id', studentIds)
           .gte('created_at', startDate.toIso8601String())
           .lt('created_at', endDate.toIso8601String());
+      
+      // Apply session filter if a specific session is selected
+      if (selectedSessionId != null) {
+        attendanceQuery = attendanceQuery.eq('session_id', selectedSessionId!);
+      }
+      
+      final attendanceResponse = await attendanceQuery;
 
       // Create a map of user_id to attendance status for quick lookup
       final Map<String, Map<String, dynamic>> attendanceMap = {};
       for (final attendance in attendanceResponse) {
         final userId = attendance['user_id'].toString();
-        // If multiple records exist for the same user, keep the latest one
         if (!attendanceMap.containsKey(userId) || 
             DateTime.parse(attendance['created_at']).isAfter(
               DateTime.parse(attendanceMap[userId]!['created_at'])
@@ -206,17 +255,18 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
         final userId = student['id'].toString();
         final attendanceRecord = attendanceMap[userId];
         
-        String status = 'absent'; // Default to absent if no record found
+        String status = 'absent';
         String? recordId;
         DateTime? recordDateTime;
+        String? sessionId;
         
         if (attendanceRecord != null) {
           status = attendanceRecord['status'] ?? 'absent';
           recordId = attendanceRecord['id'];
           recordDateTime = DateTime.parse(attendanceRecord['created_at']);
+          sessionId = attendanceRecord['session_id'];
         }
 
-        // Count the statuses
         switch (status.toLowerCase()) {
           case 'present':
             presentCount++;
@@ -235,6 +285,7 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
           'status': status,
           'created_at': recordDateTime?.toIso8601String() ?? startDate.toIso8601String(),
           'user_id': student['id'],
+          'session_id': sessionId,
           'users': {
             'firstname': student['firstname'],
             'lastname': student['lastname'],
@@ -242,7 +293,7 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
             'company_id': student['company_id'],
             'platoon_id': student['platoon_id'],
           },
-          'has_record': attendanceRecord != null, // Flag to identify if student actually checked in
+          'has_record': attendanceRecord != null,
         });
       }
 
@@ -325,6 +376,25 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
     _loadAttendanceData();
   }
 
+  void _onSessionChanged(String? value) {
+    if (value == null) return;
+    
+    setState(() {
+      if (value == 'All Sessions') {
+        selectedSessionId = null;
+        selectedSessionName = 'All Sessions';
+      } else {
+        final session = availableSessions.firstWhere(
+          (s) => _getSessionDisplayName(s) == value,
+          orElse: () => {'id': null, 'session_name': 'All Sessions'},
+        );
+        selectedSessionId = session['id'];
+        selectedSessionName = value;
+      }
+    });
+    _loadAttendanceData();
+  }
+
   List<Map<String, dynamic>> getAvailablePlatoonsForCompany() {
     if (selectedCompanyId == null) {
       return availablePlatoons;
@@ -341,6 +411,12 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
   List<String> getPlatoonDropdownItems() {
     List<String> items = ['All Platoons'];
     items.addAll(getAvailablePlatoonsForCompany().map((p) => p['name'].toString()));
+    return items;
+  }
+
+  List<String> getSessionDropdownItems() {
+    List<String> items = ['All Sessions'];
+    items.addAll(availableSessions.map((s) => _getSessionDisplayName(s)));
     return items;
   }
 
@@ -368,8 +444,11 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
     if (picked != null && picked != selectedDate) {
       setState(() {
         selectedDate = picked;
+        selectedSessionId = null;
+        selectedSessionName = 'All Sessions';
       });
-      _loadAttendanceData();
+      await _loadAvailableSessions();
+      await _loadAttendanceData();
     }
   }
 
@@ -393,20 +472,19 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
     }
     
     final dateTime = DateTime.parse(dateTimeString);
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
+    final hour = dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour;
+    final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour == 0 ? 12 : hour;
+    return '${displayHour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')} $period';
+  }
 
-    if (difference.inDays == 0) {
-      // Same day, show time
-      final hour = dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour;
-      final period = dateTime.hour >= 12 ? 'PM' : 'AM';
-      final displayHour = hour == 0 ? 12 : hour;
-      return '${displayHour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')} $period';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    }
+  String _getSessionName(String? sessionId) {
+    if (sessionId == null) return 'No session';
+    final session = availableSessions.firstWhere(
+      (s) => s['id'] == sessionId,
+      orElse: () => {'session_name': 'Unknown'},
+    );
+    return session['session_name'];
   }
 
   @override
@@ -414,36 +492,35 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-  backgroundColor: const Color(0xFF059669),
-  foregroundColor: Colors.white,
-  title: const Text(
-    'Attendance Log',
-    style: TextStyle(
-      fontWeight: FontWeight.w600,
-    ),
-  ),
-  elevation: 0,
-  actions: [
-    IconButton(
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AttendanceAnalyticsPage(
-              companyId: selectedCompanyId,
-              companyName: selectedCompanyName,
-              platoonId: selectedPlatoonId,
-              platoonName: selectedPlatoonName,
-            ),
+        backgroundColor: const Color(0xFF059669),
+        foregroundColor: Colors.white,
+        title: const Text(
+          'Attendance Log',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
           ),
-        );
-      },
-      icon: const Icon(Icons.analytics),
-      tooltip: 'View Analytics',
-    ),
-  ],
-),
-
+        ),
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AttendanceAnalyticsPage(
+                    companyId: selectedCompanyId,
+                    companyName: selectedCompanyName,
+                    platoonId: selectedPlatoonId,
+                    platoonName: selectedPlatoonName,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.analytics),
+            tooltip: 'View Analytics',
+          ),
+        ],
+      ),
       body: SafeArea(
         child: isLoading
             ? const Center(
@@ -456,9 +533,6 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Selection Info Card
-                    
-
                     // Filter Controls
                     Column(
                       children: [
@@ -484,41 +558,56 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        // Date Picker
-                        GestureDetector(
-                          onTap: _selectDate,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 5,
-                                  offset: const Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today, 
-                                    color: Color(0xFF6B7280), size: 20),
-                                const SizedBox(width: 12),
-                                Text(
-                                  _formatDate(selectedDate),
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Color(0xFF374151),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: GestureDetector(
+                                onTap: _selectDate,
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.05),
+                                        blurRadius: 5,
+                                        offset: const Offset(0, 1),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.calendar_today, 
+                                          color: Color(0xFF6B7280), size: 20),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        _formatDate(selectedDate),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          color: Color(0xFF374151),
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      const Icon(Icons.arrow_drop_down, 
+                                          color: Color(0xFF6B7280)),
+                                    ],
                                   ),
                                 ),
-                                const Spacer(),
-                                const Icon(Icons.arrow_drop_down, 
-                                    color: Color(0xFF6B7280)),
-                              ],
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: _buildDropdown(
+                                value: selectedSessionName,
+                                items: getSessionDropdownItems(),
+                                onChanged: _onSessionChanged,
+                                hint: 'Select Session',
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -626,12 +715,27 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
                                     color: Color(0xFF374151),
                                   ),
                                 ),
-                                Text(
-                                  _formatDate(selectedDate),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Color(0xFF6B7280),
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      _formatDate(selectedDate),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF6B7280),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (selectedSessionId != null)
+                                      Text(
+                                        selectedSessionName,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF059669),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -662,7 +766,7 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
                                     const SizedBox(height: 4),
                                     Text(
                                       searchQuery.isEmpty 
-                                          ? 'No students in selected company/platoon'
+                                          ? 'No students in selected filters'
                                           : 'Try adjusting your search terms',
                                       style: TextStyle(
                                         color: Colors.grey[500],
@@ -691,6 +795,7 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
                                   checkInTime: _formatDateTime(record['created_at'], hasRecord),
                                   status: record['status'] ?? 'absent',
                                   hasRecord: hasRecord,
+                                  sessionName: _getSessionName(record['session_id']),
                                 );
                               },
                             ),
@@ -737,16 +842,32 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
         value: value,
         decoration: InputDecoration(
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.all(16),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           hintText: hint,
         ),
+        isExpanded: true,
         items: items.map((String item) {
           return DropdownMenuItem<String>(
             value: item,
-            child: Text(item),
+            child: Text(
+              item,
+              style: const TextStyle(fontSize: 13),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           );
         }).toList(),
         onChanged: onChanged,
+        selectedItemBuilder: (BuildContext context) {
+          return items.map<Widget>((String item) {
+            return Text(
+              item,
+              style: const TextStyle(fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            );
+          }).toList();
+        },
       ),
     );
   }
@@ -801,6 +922,7 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
     required String checkInTime,
     required String status,
     required bool hasRecord,
+    required String sessionName,
   }) {
     Color statusColor;
     Color statusBg;
@@ -870,6 +992,18 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
                     fontSize: 14,
                   ),
                 ),
+                if (hasRecord && selectedSessionId == null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      sessionName,
+                      style: const TextStyle(
+                        color: Color(0xFF059669),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -901,59 +1035,6 @@ class _AttendanceLogPageState extends State<AttendanceLogPage> {
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showGenerateReportDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Generate Report'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Generate report for ${selectedCompanyName} - ${selectedPlatoonName}:'),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.description),
-              title: const Text('PDF Report'),
-              subtitle: const Text('Detailed attendance report'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Implement PDF generation
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('PDF generation coming soon!'),
-                    backgroundColor: Color(0xFF059669),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.table_chart),
-              title: const Text('Excel Spreadsheet'),
-              subtitle: const Text('Raw data for analysis'),
-              onTap: () {
-                Navigator.pop(context);
-                // TODO: Implement Excel generation
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Excel generation coming soon!'),
-                    backgroundColor: Color(0xFF059669),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
         ],
       ),
