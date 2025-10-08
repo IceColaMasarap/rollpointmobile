@@ -300,7 +300,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 8),
             Text(
-              'Sign in to your instructor account',
+              'Sign in to your account',
               style: TextStyle(
                 color: const Color(0xFF6b7280),
                 fontSize: compact ? 14 : 15,

@@ -6,6 +6,7 @@ import 'view_platoons_page.dart';
 import 'attendance_log_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'attendance_analytics_page.dart';
+import 'package:intl/intl.dart';
 
 class InstructorPage extends StatefulWidget {
   const InstructorPage({super.key});
@@ -197,7 +198,7 @@ class _InstructorPageState extends State<InstructorPage> {
 
       final totalStudents = studentsResponse.length;
 
-      // Get today's attendance for these students (no join needed - keep as is)
+      // Get today's attendance for these students
       final today = DateTime.now();
       final startOfDay = DateTime(today.year, today.month, today.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
@@ -210,7 +211,7 @@ class _InstructorPageState extends State<InstructorPage> {
       // Debug: Log student IDs
       print('Student IDs for attendance: $studentIds');
 
-      // Get today's attendance (no join needed - keep as is)
+      // Get today's attendance - Count 'present' and 'late' as present
       final attendanceResponse = await _supabase
           .from('attendance')
           .select('user_id, status')
@@ -221,39 +222,35 @@ class _InstructorPageState extends State<InstructorPage> {
       // Debug: Log today's attendance response
       print('Attendance fetched for today: $attendanceResponse');
 
+      // Count 'present' and 'late' as present
       final presentToday = attendanceResponse
-          .where((record) => record['status'] == 'present')
+          .where(
+            (record) =>
+                record['status'] == 'present' || record['status'] == 'late',
+          )
           .length;
       final absentToday = totalStudents - presentToday;
       final attendanceRate = totalStudents > 0
           ? (presentToday / totalStudents * 100)
           : 0.0;
 
-      // Get recent activity using stored procedure
+      // Get recent activity with session information
       print('Fetching recent attendance activity...');
-      final recentActivityResponse = await _supabase.rpc(
-        'get_recent_attendance_activity',
-        params: {'student_ids': studentIds, 'activity_limit': 10},
-      );
+      final recentActivityResponse = await _supabase
+          .from('attendance')
+          .select('''
+          status,
+          created_at,
+          user_id,
+          users!attendance_user_id_fkey(firstname, lastname, student_id),
+          attendance_sessions!attendance_session_id_fkey(session_name, start_time)
+        ''')
+          .inFilter('user_id', studentIds)
+          .order('created_at', ascending: false)
+          .limit(10);
 
       // Debug: Log recent activity response
       print('Recent activity fetched: $recentActivityResponse');
-
-      // Transform the response to match expected structure
-      final transformedActivity = recentActivityResponse
-          .map<Map<String, dynamic>>(
-            (activity) => {
-              'status': activity['status'],
-              'created_at': activity['created_at'],
-              'user_id': activity['user_id'],
-              'users': {
-                'firstname': activity['user_firstname'],
-                'lastname': activity['user_lastname'],
-                'student_id': activity['user_student_id'],
-              },
-            },
-          )
-          .toList();
 
       setState(() {
         attendanceStats = {
@@ -262,7 +259,7 @@ class _InstructorPageState extends State<InstructorPage> {
           'absentToday': absentToday,
           'attendanceRate': attendanceRate,
         };
-        recentActivity = transformedActivity;
+        recentActivity = recentActivityResponse.cast<Map<String, dynamic>>();
       });
     } catch (e) {
       print('Error loading attendance data: $e');
@@ -294,6 +291,16 @@ class _InstructorPageState extends State<InstructorPage> {
       return '${difference.inHours} hours ago';
     } else {
       return '${difference.inDays} days ago';
+    }
+  }
+
+  String _formatSessionTime(String? startTime) {
+    if (startTime == null) return '';
+    try {
+      final dateTime = DateTime.parse(startTime);
+      return DateFormat('h:mm a').format(dateTime);
+    } catch (e) {
+      return '';
     }
   }
 
@@ -422,8 +429,7 @@ class _InstructorPageState extends State<InstructorPage> {
                                   ),
                                 ),
                                 child: const Row(
-                                  crossAxisAlignment: CrossAxisAlignment
-                                      .start, // optional: better for multiline
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Icon(
                                       Icons.warning,
@@ -432,7 +438,6 @@ class _InstructorPageState extends State<InstructorPage> {
                                     ),
                                     SizedBox(width: 8),
                                     Expanded(
-                                      // ✅ allows text to wrap properly
                                       child: Text(
                                         'No assignments found. Contact administrator.',
                                         style: TextStyle(
@@ -658,25 +663,43 @@ class _InstructorPageState extends State<InstructorPage> {
                       const SizedBox(height: 16),
 
                       // Recent Activity Items
+                      const Text(
+                        'Recent Attendance',
+                        style: TextStyle(
+                          color: Color(0xFF374151),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+
                       if (recentActivity.isNotEmpty)
-                        ...recentActivity
-                            .take(3)
-                            .map(
-                              (activity) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _buildActivityItem(
-                                  studentName:
-                                      '${activity['users']['firstname']} ${activity['users']['lastname']}',
-                                  studentId:
-                                      activity['users']['student_id'] ?? 'N/A',
-                                  action: activity['status'] == 'present'
-                                      ? 'Present'
-                                      : 'Absent',
-                                  time: _getTimeAgo(activity['created_at']),
-                                  status: activity['status'],
-                                ),
-                              ),
-                            )
+                        ...recentActivity.take(3).map((activity) {
+                          final sessionName =
+                              activity['attendance_sessions']?['session_name'];
+                          final sessionTime =
+                              activity['attendance_sessions']?['start_time'];
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildActivityItem(
+                              studentName:
+                                  '${activity['users']['firstname']} ${activity['users']['lastname']}',
+                              studentId:
+                                  activity['users']['student_id'] ?? 'N/A',
+                              action: activity['status'] == 'present'
+                                  ? 'Present'
+                                  : activity['status'] == 'late'
+                                  ? 'Late'
+                                  : 'Absent',
+                              time: _getTimeAgo(activity['created_at']),
+                              status: activity['status'],
+                              sessionName: sessionName,
+                              sessionTime: _formatSessionTime(sessionTime),
+                            ),
+                          );
+                        })
                       else
                         Container(
                           width: double.infinity,
@@ -880,6 +903,8 @@ class _InstructorPageState extends State<InstructorPage> {
     required String action,
     required String time,
     required String status,
+    String? sessionName,
+    String? sessionTime,
   }) {
     Color statusColor;
     Color statusBg;
@@ -890,6 +915,11 @@ class _InstructorPageState extends State<InstructorPage> {
         statusColor = const Color(0xFF059669);
         statusBg = const Color(0xFFDCFCE7);
         statusIcon = Icons.check_circle;
+        break;
+      case 'late':
+        statusColor = const Color(0xFFF59E0B);
+        statusBg = const Color(0xFFFEF3C7);
+        statusIcon = Icons.schedule;
         break;
       default: // absent
         statusColor = const Color(0xFFEF4444);
@@ -944,6 +974,25 @@ class _InstructorPageState extends State<InstructorPage> {
                       fontSize: 14,
                     ),
                   ),
+                  if (sessionName != null && sessionTime != null) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(Icons.event, size: 12, color: Colors.grey[500]),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            '$sessionName • $sessionTime',
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
