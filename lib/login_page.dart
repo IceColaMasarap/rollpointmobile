@@ -264,16 +264,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 'lib/assets/logoName1.png',
                 height: compact ? 70 : 110,
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Streamline attendance tracking with smart QR technology',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: compact ? 16 : 18,
-                  height: 1.6,
-                ),
-                textAlign: TextAlign.center,
-              ),
+      
             ],
           ),
         ),
@@ -320,10 +311,21 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 const Color(0xFFf0fdf4),
               ),
             _buildTextField(
-              controller: _emailController,
-              label: 'Email',
-              hint: 'Enter your email',
-            ),
+  controller: _emailController,
+  label: 'Email',
+  hint: 'Enter your email',
+  validator: (value) {
+    if (value == null || value.isEmpty) {
+      return 'Email is required';
+    }
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(value.trim())) {
+      return 'Enter a valid email address';
+    }
+    return null;
+  },
+),
+
             const SizedBox(height: 20),
             _buildTextField(
               controller: _passwordController,
@@ -411,55 +413,54 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   }
 
   Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required String hint,
-    bool isPassword = false,
-    bool? obscureText, // Add this parameter
-    VoidCallback? onToggleVisibility, // Add this parameter
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFF374151),
-            fontWeight: FontWeight.w500,
-            fontSize: 14,
-          ),
+  required TextEditingController controller,
+  required String label,
+  required String hint,
+  bool isPassword = false,
+  bool? obscureText,
+  VoidCallback? onToggleVisibility,
+  String? Function(String?)? validator, // <-- Add this line
+}) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF374151),
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
         ),
-        const SizedBox(height: 6),
-        TextFormField(
-          controller: controller,
-          obscureText: obscureText ?? isPassword,
-          validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-          decoration: InputDecoration(
-            hintText: hint,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
-            filled: true,
-            fillColor: Colors.white,
-            // Add suffix icon for password toggle
-            suffixIcon: isPassword && onToggleVisibility != null
-                ? IconButton(
-                    icon: Icon(
-                      obscureText ?? true
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                      color: const Color(0xFF6b7280),
-                    ),
-                    onPressed: onToggleVisibility,
-                  )
-                : null,
-          ),
+      ),
+      const SizedBox(height: 6),
+      TextFormField(
+        controller: controller,
+        obscureText: obscureText ?? isPassword,
+        validator: validator ??
+            (value) => value?.isEmpty ?? true ? 'Required' : null, // <-- Use custom validator if given
+        decoration: InputDecoration(
+          hintText: hint,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          filled: true,
+          fillColor: Colors.white,
+          suffixIcon: isPassword && onToggleVisibility != null
+              ? IconButton(
+                  icon: Icon(
+                    obscureText ?? true
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    color: const Color(0xFF6b7280),
+                  ),
+                  onPressed: onToggleVisibility,
+                )
+              : null,
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
+
 
   Widget _buildLoginButton() {
     return ElevatedButton(

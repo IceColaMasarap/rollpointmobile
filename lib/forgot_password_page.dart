@@ -445,23 +445,37 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
         children: [
           const SizedBox(height: 30),
           _buildTextField(
-            controller: _newPasswordController,
-            label: 'New Password',
-            hint: 'Enter new password',
-            isPassword: true,
-            obscureText: !_showNewPassword,
-            suffixIcon: IconButton(
-              icon: Icon(
-                _showNewPassword ? Icons.visibility_off : Icons.visibility,
-                color: const Color(0xFF6b7280),
-              ),
-              onPressed: () {
-                setState(() {
-                  _showNewPassword = !_showNewPassword;
-                });
-              },
-            ),
-          ),
+  controller: _newPasswordController,
+  label: 'New Password',
+  hint: 'Enter new password',
+  isPassword: true,
+  obscureText: !_showNewPassword,
+  validator: (value) {
+    if (value?.isEmpty ?? true) return "Password is required";
+    if (value!.length < 8) {
+      return "Password must be at least 8 characters";
+    }
+    final passwordRegex = RegExp(
+      r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};:"\\|,.<>/?]).{8,}$',
+    );
+    if (!passwordRegex.hasMatch(value)) {
+      return "Password must contain at least one uppercase letter, one number, and one special character";
+    }
+    return null;
+  },
+  suffixIcon: IconButton(
+    icon: Icon(
+      _showNewPassword ? Icons.visibility_off : Icons.visibility,
+      color: const Color(0xFF6b7280),
+    ),
+    onPressed: () {
+      setState(() {
+        _showNewPassword = !_showNewPassword;
+      });
+    },
+  ),
+),
+
           const SizedBox(height: 20),
           _buildTextField(
             controller: _confirmPasswordController,
@@ -580,6 +594,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage>
             filled: true,
             fillColor: Colors.white,
             suffixIcon: suffixIcon,
+            errorMaxLines: 3,
+
           ),
         ),
       ],

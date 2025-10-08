@@ -9,41 +9,29 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage>
-    with TickerProviderStateMixin {
+class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // Fixed: Proper Supabase client initialization
   SupabaseClient get _supabase => Supabase.instance.client;
 
   bool _isLoading = false;
   String? _errorMessage;
   String? _successMessage;
   bool _agreeTerms = false;
+  bool _agreePrivacy = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    );
-    _animationController.forward();
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -52,9 +40,17 @@ class _RegisterPageState extends State<RegisterPage>
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
+    
     if (!_agreeTerms) {
       setState(() {
         _errorMessage = "You must agree to the Terms and Conditions";
+      });
+      return;
+    }
+    
+    if (!_agreePrivacy) {
+      setState(() {
+        _errorMessage = "You must agree to the Data Privacy Consent";
       });
       return;
     }
@@ -101,6 +97,160 @@ class _RegisterPageState extends State<RegisterPage>
         _isLoading = false;
       });
     }
+  }
+
+  void _showTermsModal() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Terms and Conditions',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF059669),
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildTermsSection(
+                  '1. Acceptance of Terms',
+                  'By accessing and using this application, you accept and agree to be bound by the terms and provision of this agreement.',
+                ),
+                _buildTermsSection(
+                  '2. Use License',
+                  'Permission is granted to temporarily use this application for personal, non-commercial transitory viewing only.',
+                ),
+                _buildTermsSection(
+                  '3. User Account',
+                  'You are responsible for maintaining the confidentiality of your account and password. You agree to accept responsibility for all activities that occur under your account.',
+                ),
+                _buildTermsSection(
+                  '4. Prohibited Activities',
+                  'You may not access or use the application for any purpose other than that for which we make the application available. The application may not be used in connection with any commercial endeavors.',
+                ),
+                _buildTermsSection(
+                  '5. Termination',
+                  'We may terminate or suspend your account and bar access to the application immediately, without prior notice or liability, under our sole discretion.',
+                ),
+                _buildTermsSection(
+                  '6. Modifications',
+                  'We reserve the right to modify or replace these Terms at any time. It is your responsibility to check these Terms periodically for changes.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  color: Color(0xFF059669),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showPrivacyModal() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Data Privacy Consent',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF059669),
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildTermsSection(
+                  'Information We Collect',
+                  'We collect information that you provide directly to us, including your name, email address, and other contact information.',
+                ),
+                _buildTermsSection(
+                  'How We Use Your Information',
+                  'We use the information we collect to provide, maintain, and improve our services, to communicate with you, and to comply with legal obligations.',
+                ),
+                _buildTermsSection(
+                  'Data Security',
+                  'We implement appropriate technical and organizational measures to protect your personal information against unauthorized or unlawful processing and accidental loss, destruction, or damage.',
+                ),
+                _buildTermsSection(
+                  'Your Rights',
+                  'You have the right to access, correct, or delete your personal information. You may also object to or restrict certain processing of your data.',
+                ),
+                _buildTermsSection(
+                  'Data Retention',
+                  'We retain your personal information only for as long as necessary to fulfill the purposes for which it was collected and to comply with legal obligations.',
+                ),
+                _buildTermsSection(
+                  'Contact Us',
+                  'If you have any questions about this Privacy Policy, please contact us through the appropriate channels provided in the application.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Close',
+                style: TextStyle(
+                  color: Color(0xFF059669),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTermsSection(String title, String content) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: Color(0xFF374151),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Color(0xFF6b7280),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showVerificationModal() {
@@ -150,8 +300,8 @@ class _RegisterPageState extends State<RegisterPage>
                     ),
                   ),
                   onPressed: () {
-                    Navigator.of(context).pop(); // Close modal
-                    Navigator.of(context).pop(); // Go back to login
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pop();
                   },
                   child: const Text(
                     'Got it!',
@@ -179,24 +329,21 @@ class _RegisterPageState extends State<RegisterPage>
         ),
         child: SafeArea(
           child: Center(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWideScreen = constraints.maxWidth > 768;
-                  return Container(
-                    margin: isWideScreen
-                        ? const EdgeInsets.all(20)
-                        : EdgeInsets.zero,
-                    constraints: isWideScreen
-                        ? const BoxConstraints(maxWidth: 1000)
-                        : const BoxConstraints.expand(),
-                    child: isWideScreen
-                        ? _buildWideLayout(isWideScreen)
-                        : _buildNarrowLayout(isWideScreen),
-                  );
-                },
-              ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWideScreen = constraints.maxWidth > 768;
+                return Container(
+                  margin: isWideScreen
+                      ? const EdgeInsets.all(20)
+                      : EdgeInsets.zero,
+                  constraints: isWideScreen
+                      ? const BoxConstraints(maxWidth: 1000)
+                      : const BoxConstraints.expand(),
+                  child: isWideScreen
+                      ? _buildWideLayout(isWideScreen)
+                      : _buildNarrowLayout(isWideScreen),
+                );
+              },
             ),
           ),
         ),
@@ -263,19 +410,8 @@ class _RegisterPageState extends State<RegisterPage>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
-                'lib/assets/logoName1.png', // or 'assets/logoName.png' if you follow convention
-                height: compact
-                    ? 70
-                    : 110, // adjust size to match old text size
-              ),
-              SizedBox(height: 16),
-              Text(
-                'Join Attendeee and manage attendance effortlessly!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: compact ? 14 : 16,
-                ),
+                'lib/assets/logoName1.png',
+                height: compact ? 70 : 110,
               ),
             ],
           ),
@@ -294,13 +430,21 @@ class _RegisterPageState extends State<RegisterPage>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                "Sign Up",
+                "Join Us",
                 style: TextStyle(
                   color: const Color(0xFF1f2937),
                   fontSize: compact ? 24 : 28,
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const SizedBox(height: 8),
+            Text(
+              'Create an account',
+              style: TextStyle(
+                color: const Color(0xFF6b7280),
+                fontSize: compact ? 14 : 15,
+              ),
+            ),
               const SizedBox(height: 20),
               if (_errorMessage != null)
                 _buildMessage(
@@ -315,7 +459,6 @@ class _RegisterPageState extends State<RegisterPage>
                   const Color(0xFFf0fdf4),
                 ),
 
-              // Email Field
               _buildTextField(
                 controller: _emailController,
                 label: "Email",
@@ -331,7 +474,6 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 15),
 
-              // Password Field
               _buildTextField(
                 controller: _passwordController,
                 label: "Password",
@@ -359,7 +501,6 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 15),
 
-              // 4. Update the Confirm Password field call (around line 392):
               _buildTextField(
                 controller: _confirmPasswordController,
                 label: "Confirm Password",
@@ -380,10 +521,11 @@ class _RegisterPageState extends State<RegisterPage>
                   return null;
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
 
-              // Terms and Conditions
+              // Terms and Conditions Checkbox
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Checkbox(
                     value: _agreeTerms,
@@ -392,25 +534,68 @@ class _RegisterPageState extends State<RegisterPage>
                         _agreeTerms = value ?? false;
                       });
                     },
+                    activeColor: const Color(0xFF059669),
                   ),
                   Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        // TODO: Navigate to Terms page
-                      },
-                      child: const Text.rich(
-                        TextSpan(
-                          text: "I agree to the ",
-                          style: TextStyle(color: Colors.black87),
-                          children: [
-                            TextSpan(
-                              text: "Terms and Conditions",
-                              style: TextStyle(
-                                color: Color(0xFF059669),
-                                decoration: TextDecoration.underline,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: GestureDetector(
+                        onTap: _showTermsModal,
+                        child: const Text.rich(
+                          TextSpan(
+                            text: "I agree to the ",
+                            style: TextStyle(color: Colors.black87, fontSize: 14),
+                            children: [
+                              TextSpan(
+                                text: "Terms and Conditions",
+                                style: TextStyle(
+                                  color: Color(0xFF059669),
+                                  decoration: TextDecoration.underline,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Data Privacy Consent Checkbox
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Checkbox(
+                    value: _agreePrivacy,
+                    onChanged: (value) {
+                      setState(() {
+                        _agreePrivacy = value ?? false;
+                      });
+                    },
+                    activeColor: const Color(0xFF059669),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: GestureDetector(
+                        onTap: _showPrivacyModal,
+                        child: const Text.rich(
+                          TextSpan(
+                            text: "I agree to the ",
+                            style: TextStyle(color: Colors.black87, fontSize: 14),
+                            children: [
+                              TextSpan(
+                                text: "Data Privacy Consent",
+                                style: TextStyle(
+                                  color: Color(0xFF059669),
+                                  decoration: TextDecoration.underline,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -419,7 +604,6 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 20),
 
-              // Sign Up Button
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleRegister,
                 style: ElevatedButton.styleFrom(
@@ -439,7 +623,6 @@ class _RegisterPageState extends State<RegisterPage>
               ),
               const SizedBox(height: 15),
 
-              // Login link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -474,8 +657,8 @@ class _RegisterPageState extends State<RegisterPage>
     required String label,
     required String hint,
     bool isPassword = false,
-    bool? obscureText, // Add this parameter
-    VoidCallback? onToggleVisibility, // Add this parameter
+    bool? obscureText,
+    VoidCallback? onToggleVisibility,
     String? Function(String?)? validator,
   }) {
     return Column(
@@ -492,11 +675,8 @@ class _RegisterPageState extends State<RegisterPage>
         const SizedBox(height: 6),
         TextFormField(
           controller: controller,
-          obscureText:
-              obscureText ?? isPassword, // Use the parameter if provided
-          validator:
-              validator ??
-              (value) => value?.isEmpty ?? true ? "Required" : null,
+          obscureText: obscureText ?? isPassword,
+          validator: validator ?? (value) => value?.isEmpty ?? true ? "Required" : null,
           decoration: InputDecoration(
             hintText: hint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -506,7 +686,8 @@ class _RegisterPageState extends State<RegisterPage>
             ),
             filled: true,
             fillColor: Colors.white,
-            // Add suffix icon for password toggle
+            errorMaxLines: 3,
+            helperMaxLines: 3,
             suffixIcon: isPassword && onToggleVisibility != null
                 ? IconButton(
                     icon: Icon(

@@ -778,7 +778,7 @@ Row(
 
 
   Future<void> _processQRCode(String? qrData) async {
-    if (qrData == null || isProcessingQR || !isSessionActive || currentSessionId == null) return;
+  if (qrData == null || isProcessingQR || !isSessionActive || currentSessionId == null) return;
 
     // Check if session has expired
     if (DateTime.now().isAfter(sessionEndTime!)) {
